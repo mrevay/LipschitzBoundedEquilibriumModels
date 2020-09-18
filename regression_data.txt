@@ -1,0 +1,2 @@
+regression data is from the function 
+sin(x^2 / 2)
