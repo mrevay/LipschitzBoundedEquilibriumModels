@@ -284,6 +284,21 @@ class NODENFcNet(nn.Module):
         z = self.mon(x)
         return self.Wout(z[-1])
 
+
+class NODEN_Lip_Net(nn.Module):
+
+    def __init__(self, splittingMethod, gamma, in_dim=784, width=100, out_dim=10, m=0.1, **kwargs):
+        super().__init__()
+        linear_module = NODEN.NODEN_Lipschitz_Fc(in_dim, width, out_dim, gamma, m=m)
+        nonlin_module = NODEN.NODEN_ReLU()
+        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+
+    def forward(self, x):
+        x = x.view(x.shape[0], -1)
+        z = self.mon(x)
+        y = self.mon.linear_module.G(z[-1])
+        return y
+
 class NODENFcNet_uncon(nn.Module):
 
     def __init__(self, splittingMethod, in_dim=784, out_dim=100, m=0.1, **kwargs):
@@ -335,3 +350,26 @@ class  MultiConvNet(nn.Module):
         z = zs[-1]
         z = z.view(z.shape[0],-1)
         return self.Wout(z)
+
+
+
+def test_robustness(testLoader, model, epsilon):
+
+    # Test nominal performance.
+    with torch.no_grad():
+        for batch in testLoader:
+            data, target = cuda(batch[0]), cuda(batch[1])
+            preds = model(data)
+            ce_loss = nn.CrossEntropyLoss(reduction='sum')(preds, target)
+            test_loss += ce_loss
+            v_loss += ce_loss.item()
+            incorrect_val += preds.float().argmax(1).ne(target.data).sum()
+        test_loss /= len(testLoader.dataset)
+        nTotal = len(testLoader.dataset)
+        err = 100. * incorrect_val.float() / float(nTotal)
+        print('\n\nTest set: Average loss: {:.4f}, Error: {}/{} ({:.2f}%)'.format(
+            test_loss, incorrect_val, nTotal, err))
+
+    val_loss.append(100. * incorrect_val.float() / float(nTotal))
+
+    # Test adversarial performance

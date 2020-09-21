@@ -20,17 +20,46 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
 
-    # trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-    #                                               test_batch_size=400)
+    trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
+                                                  test_batch_size=400)
 
     # trainLoader, testLoader = train.cifar_loaders(train_batch_size=128, test_batch_size=400)
-    trainLoader, testLoader = train.cifar_loaders(train_batch_size=128, test_batch_size=400, augment=False)
+    # trainLoader, testLoader = train.cifar_loaders(train_batch_size=128, test_batch_size=400, augment=False)
 
     epochs = 80
-    seed = 7
+    seed = 8
     tol = 1E-3
-    width = 100
+    width = 80
     lr_decay_steps = 20
+
+    image_size = 28 * 28
+
+    # Ode stability condition
+    torch.manual_seed(seed)
+    numpy.random.seed(seed)
+
+    LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
+                                 in_dim=image_size,
+                                 width=width,
+                                 out_dim=10,
+                                 alpha=1.0,
+                                 max_iter=300,
+                                 tol=tol,
+                                 m=1.0,
+                                 gamma=10)
+
+    lip_train, lip_test = train.train(trainLoader, testLoader,
+                                      LipNet,
+                                      max_lr=1e-3,
+                                      lr_mode='step',
+                                      step=lr_decay_steps,
+                                      change_mo=False,
+                                       epochs=epochs,
+                                      print_freq=100,
+                                      tune_alpha=True)
+
+
+
 
     torch.manual_seed(seed)
     numpy.random.seed(seed)
