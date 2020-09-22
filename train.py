@@ -9,6 +9,8 @@ import mon
 import numpy as np
 import time
 
+import matplotlib.pyplot as plt
+
 import NODEN
 
 # torch.set_default_dtype(torch.float64)  # double precision for SDP
@@ -88,6 +90,9 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
                 model.mon.stats.report()
                 model.mon.stats.reset()
             optimizer.step()
+
+            if hasattr(model.mon.linear_module, 'Lambda'):
+                model.mon.linear_module.Lambda.data[model.mon.linear_module.Lambda.data <= 1E-3] = 1E-3
 
         if lr_mode == 'step':
             lr_scheduler.step()
@@ -353,9 +358,16 @@ class  MultiConvNet(nn.Module):
 
 
 
-def test_robustness(testLoader, model, epsilon):
+def test_robustness(model, testLoader):
+
+    maxIter = 1000
+    model = model.eval()
 
     # Test nominal performance.
+    test_loss = 0
+    v_loss = 0
+    incorrect_val = 0
+
     with torch.no_grad():
         for batch in testLoader:
             data, target = cuda(batch[0]), cuda(batch[1])
@@ -370,6 +382,72 @@ def test_robustness(testLoader, model, epsilon):
         print('\n\nTest set: Average loss: {:.4f}, Error: {}/{} ({:.2f}%)'.format(
             test_loss, incorrect_val, nTotal, err))
 
-    val_loss.append(100. * incorrect_val.float() / float(nTotal))
+    nominal_perf = err
 
-    # Test adversarial performance
+    # Estimate Lipschitz constant of model
+    Lip = 0
+    u = torch.randn_like(batch[0][:, 0:1, :, :], requires_grad=True)
+    v = torch.randn_like(u, requires_grad=True)
+    u.requires_grad = True
+
+    epsilons = np.linspace(1E-2, 5, 50)
+    optimizer = torch.optim.Adam([u, v], lr=1E-2)
+    for iter in range(maxIter):
+        optimizer.zero_grad()
+        y1 = model(u)
+        y2 = model(u + v)
+
+        Lip_last = Lip
+        Lip = (y1 - y2).norm(dim=1) **2 / v.view([2000, -1]).norm(dim=1) **2
+        Obj = -Lip.sum()
+        Obj.backward()
+        optimizer.step()
+
+        print(Lip.max().sqrt().item())
+
+        if iter > 1:
+            if Lip.max() < Lip_last.max() + 1E-4:
+                break
+
+    # Estimate Adversarial perturbations
+    u = batch[0][:, 0:1, :, :]
+    v = torch.randn_like(u, requires_grad=True)
+    v.data /= 100
+
+    epsilons = np.linspace(1E-2, 10, 20)
+    optimizer = torch.optim.Adam([v], lr=1E-2)
+
+    J = 0
+    J_last = 1
+    errors = []
+    for idx, epsilon in enumerate(epsilons):
+        # Calculate an adersarial perterbation of size epsilon
+        for iter in range(maxIter):
+            optimizer.zero_grad()
+            preds = model(u + v)
+
+            ce_loss = -nn.CrossEntropyLoss(reduction='sum')(preds, target)
+
+            ce_loss.backward()
+            optimizer.step()
+
+            J_last = J
+            J = -ce_loss.item()
+
+            with torch.no_grad():
+                pert_size = v.norm(dim=(2, 3))
+                v.data[pert_size > epsilon] = v.data[pert_size > epsilon] * epsilon / pert_size[pert_size > epsilon, None, None]
+
+            if iter > 20:
+                if J <= J_last + 1E-4:
+                    break
+
+        # Calculate the number of incorrect predictions with the adversarial pert.
+        incorrect_val = preds.float().argmax(1).ne(target.data).sum()
+        err = 100. * incorrect_val.float() / preds.shape[0]
+        print(err.item())
+        errors.append(err.item())
+
+    results = {"nominal": nominal_perf, "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
+
+    return results

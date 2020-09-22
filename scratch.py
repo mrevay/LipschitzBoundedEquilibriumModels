@@ -15,18 +15,19 @@ import scipy.io as io
 
 import matplotlib.pyplot as plt
 
-# torch.set_default_dtype(torch.float64)  # double precision for SDP
-# torch.set_printoptions(precision=4)
 
 if __name__ == "__main__":
 
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-                                                  test_batch_size=400)
+                                                  test_batch_size=2000)
 
-    # trainLoader, testLoader = train.cifar_loaders(train_batch_size=128, test_batch_size=400)
-    # trainLoader, testLoader = train.cifar_loaders(train_batch_size=128, test_batch_size=400, augment=False)
+    # net = train.SingleFcNet(sp.MONPeacemanRachford, in_dim=28**2, out_dim=87, 
+    #                         alpha=1.0, max_iter=300, tol=1e-4, m=1.0)
 
-    epochs = 80
+    # net.load_state_dict(torch.load('./mnist_fc_model_trained.pt', map_location=torch.device('cpu') ))
+    # results = train.test_robustness(net, testLoader)
+
+    epochs = 40
     seed = 8
     tol = 1E-3
     width = 80
@@ -34,55 +35,72 @@ if __name__ == "__main__":
 
     image_size = 28 * 28
 
-    # Ode stability condition
+    # Lipschitz Networks
+    # models = []
+    # results = []
+    # for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
+
+    #     torch.manual_seed(seed)
+    #     numpy.random.seed(seed)
+
+    #     LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
+    #                                 in_dim=image_size,
+    #                                 width=width,
+    #                                 out_dim=10,
+    #                                 alpha=1.0,
+    #                                 max_iter=300,
+    #                                 tol=tol,
+    #                                 m=1.0,
+    #                                 gamma=gamma)
+
+    #     lip_train, lip_test = train.train(trainLoader, testLoader,
+    #                                     LipNet,
+    #                                     max_lr=1e-3,
+    #                                     lr_mode='step',
+    #                                     step=lr_decay_steps,
+    #                                     change_mo=False,
+    #                                     epochs=epochs,
+    #                                     print_freq=100,
+    #                                     tune_alpha=True)
+
+    #     res = train.test_robustness(LipNet, testLoader)
+    #     path = './models/'
+    #     name = 'fc_lip{:2.1f}_w{:d}'.format(gamma, width)
+    #     torch.save(LipNet.state_dict(), path + name + '.params')
+    #     io.savemat(path + name + '.mat', res)
+
+    #     models += [LipNet]
+    #     results += [res]
+
+
+    # unconstrained network
+
     torch.manual_seed(seed)
     numpy.random.seed(seed)
 
-    LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
-                                 in_dim=image_size,
-                                 width=width,
-                                 out_dim=10,
-                                 alpha=1.0,
-                                 max_iter=300,
-                                 tol=tol,
-                                 m=1.0,
-                                 gamma=10)
-
-    lip_train, lip_test = train.train(trainLoader, testLoader,
-                                      LipNet,
-                                      max_lr=1e-3,
-                                      lr_mode='step',
-                                      step=lr_decay_steps,
-                                      change_mo=False,
-                                       epochs=epochs,
-                                      print_freq=100,
-                                      tune_alpha=True)
-
-
-
-
-    torch.manual_seed(seed)
-    numpy.random.seed(seed)
-
-    # unconstraIEND NETWORK
     unconNet = train.NODENFcNet_uncon(sp.MONPeacemanRachford,
-                   in_dim=3*32*32,
-                   out_dim=width,
-                   alpha=1.0,
-                   max_iter=300,
-                   tol=tol,
-                   m=1.0)
-
+                                      in_dim=image_size,
+                                      out_dim=width,
+                                      alpha=1.0,
+                                      max_iter=300,
+                                      tol=tol,
+                                      m=1.0)
 
     uncon_train, uncon_test = train.train(trainLoader, testLoader,
-                unconNet,
-                max_lr=1e-3,
-                lr_mode='step',
-                step=lr_decay_steps,
-                change_mo=False,
-                epochs=epochs,    
-                print_freq=100,
-                tune_alpha=True)
+                                          unconNet,
+                                          max_lr=1e-3,
+                                          lr_mode='step',
+                                          step=lr_decay_steps,
+                                          change_mo=False,
+                                          epochs=epochs,    
+                                          print_freq=100,
+                                          tune_alpha=True)
+
+    res = train.test_robustness(unconNet, testLoader)
+    path = './models/'
+    name = 'uncon_w{:d}'.format(width)
+    torch.save(unconNet.state_dict(), path + name + '.params')
+    io.savemat(path + name + '.mat', res)
 
 
     # Ode stability condition
@@ -90,46 +108,56 @@ if __name__ == "__main__":
     numpy.random.seed(seed)
 
     odeNet = train.NODENFcNet(sp.MONPeacemanRachford,
-                   in_dim=3*32*32,
-                   out_dim=width,
-                   alpha=1.0,
-                   max_iter=300,
-                   tol=tol,
-                   m=1.0)
-
-
-    ode_train, ode_test = train.train(trainLoader, testLoader,
-                odeNet,
-                max_lr=1e-3,
-                lr_mode='step',
-                step=lr_decay_steps,
-                change_mo=False,
-                epochs=epochs,    
-                print_freq=100,
-                tune_alpha=True)
-
-
-    # Monotone operator network
-    torch.manual_seed(seed)
-    numpy.random.seed(seed)
-
-    monNet = train.SingleFcNet(sp.MONPeacemanRachford,
-                              in_dim=3*32*32,
+                              in_dim=image_size,
                               out_dim=width,
                               alpha=1.0,
                               max_iter=300,
                               tol=tol,
                               m=1.0)
 
+    ode_train, ode_test = train.train(trainLoader, testLoader,
+                                      odeNet,
+                                      max_lr=1e-3,
+                                      lr_mode='step',
+                                      step=lr_decay_steps,
+                                      change_mo=False,
+                                      epochs=epochs,    
+                                      print_freq=100,
+                                      tune_alpha=True)
+
+    res = train.test_robustness(odeNet, testLoader)
+    path = './models/'
+    name = 'ode_w{:d}'.format(width)
+    torch.save(unconNet.state_dict(), path + name + '.params')
+    io.savemat(path + name + '.mat', res)
+
+    # Monotone operator network
+    torch.manual_seed(seed)
+    numpy.random.seed(seed)
+
+    monNet = train.SingleFcNet(sp.MONPeacemanRachford,
+                               in_dim=image_size,
+                               out_dim=width,
+                               alpha=1.0,
+                               max_iter=300,
+                               tol=tol,
+                               m=1.0)
+
     mon_train, mon_test = train.train(trainLoader, testLoader,
-                monNet,
-                max_lr=1e-3,
-                lr_mode='step',
-                step=lr_decay_steps,
-                change_mo=False,
-                epochs=epochs,
-                print_freq=100,
-                tune_alpha=True)
+                                      monNet,
+                                      max_lr=1e-3,
+                                      lr_mode='step',
+                                      step=lr_decay_steps,
+                                      change_mo=False,
+                                      epochs=epochs,
+                                      print_freq=100,
+                                      tune_alpha=True)
+
+    res = train.test_robustness(odeNet, testLoader)
+    path = './models/'
+    name = 'mon_w{:d}'.format(width)
+    torch.save(unconNet.state_dict(), path + name + '.params')
+    io.savemat(path + name + '.mat', res)
 
     # X = torch.randn(100, 3*32*32)
     # Z = torch.randn(100, width)

@@ -32,11 +32,10 @@ class NODEN_Lipschitz_Fc(nn.Module):
         return ((n_batch, self.V.in_features),)
 
     def forward(self, x, *z):
-        self.Lambda.data[self.Lambda < self.epsilon] = self.epsilon
-        return (self.B(x) / self.Lambda + self.multiply(*z)[0],)
+        return (self.B(x) + self.multiply(*z)[0],)
 
     def bias(self, x):
-        return (self.B(x) / self.Lambda,)
+        return (self.B(x),)
 
     def multiply(self, *z):
 
@@ -67,16 +66,17 @@ class NODEN_Lipschitz_Fc(nn.Module):
         VTV = self.V.weight.T @ self.V.weight + self.m * Id
         S = self.S.weight
         GTG = self.G.weight.T @ self.G.weight
-        BTB = self.Lambda.diag() @ self.B.weight @ self.B.weight.T @ self.Lambda.diag()
+        BBT = self.Lambda.diag() @ self.B.weight @ self.B.weight.T @ self.Lambda.diag()
+
         # BTB = self.B.weight.T @ self.Lambda.diag() @ self.Lambda.diag() @ self.B.weight
 
         # LambdaInv = 1 / self.Lambda
         # W = Id - LambdaInv.diag() @ (S.T - S - GTG / self.gamma
         #                              - BTB / self.gamma - VTV)
-        D = 2 * self.Lambda.diag() - GTG / self.gamma - BTB / self.gamma - VTV + S.T - S
+        D = 2 * self.Lambda.diag() - GTG / self.gamma - BBT / self.gamma - VTV + S.T - S
         Lambdainv = (1 / self.Lambda).diag()
-        W = Lambdainv @ D
-        return Lambdainv @ W
+        W = 0.5 * Lambdainv @ D
+        return W
 
 class NODEN_SingleFc(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
