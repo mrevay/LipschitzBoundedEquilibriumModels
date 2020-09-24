@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 if __name__ == "__main__":
 
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-                                                  test_batch_size=2000)
+                                                  test_batch_size=128)
 
 
     epochs = 40
