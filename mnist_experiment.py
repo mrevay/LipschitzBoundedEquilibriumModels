@@ -30,30 +30,6 @@ if __name__ == "__main__":
 
     image_size = 28 * 28
 
-
-    # trainLoader, testLoader = train.cifar_loaders(train_batch_size=128, test_batch_size=400, augment=False)
-
-    train.train(trainLoader, testLoader,
-      train.SingleConvNet(sp.MONPeacemanRachford,
-                        in_dim=28,
-                        in_channels=1,
-                        out_channels=81,
-                        alpha=1.0,
-                        max_iter=300,
-                        tol=1e-2,
-                        m=1.0),
-        max_lr=1e-3,
-        lr_mode='step',
-        step=25,
-        change_mo=False,
-#         epochs=40,
-        epochs=20,
-        print_freq=100,
-        tune_alpha=True)
-
-
-
-
     # Lipschitz Networks
     models = []
     results = []
