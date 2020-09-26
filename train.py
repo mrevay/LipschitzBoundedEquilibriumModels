@@ -318,6 +318,46 @@ class NODENFcNet_uncon(nn.Module):
         z = self.mon(x)
         return self.Wout(z[-1])
 
+class NodenConvNet(nn.Module):
+
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, **kwargs):
+        super().__init__()
+        n = in_dim + 2
+        shp = (n, n)
+        self.pool = 4
+        self.out_dim = out_channels * (n // self.pool) ** 2
+        linear_module = NODEN.NODEN_Conv(in_dim, in_channels, out_channels, shp, m=m)
+        nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
+        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.Wout = nn.Linear(self.out_dim, 10)
+
+    def forward(self, x):
+        x = F.pad(x, (1, 1, 1, 1))
+        z = self.mon(x)
+        z = F.avg_pool2d(z[-1], self.pool)
+        return self.Wout(z.view(z.shape[0], -1))
+
+
+class Noden_LipschitzConvNet(nn.Module):
+
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, gamma=1.0, **kwargs):
+        super().__init__()
+        n = in_dim + 2
+        shp = (n, n)
+        self.pool = 4
+        self.out_dim = out_channels * (n // self.pool) ** 2
+        linear_module = NODEN.NODEN_Lipschitz_Conv(in_dim, in_channels, out_channels, self.out_dim, gamma, shp, m=m)
+        nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
+        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.Wout = nn.Linear(self.out_dim, 10)
+
+    def forward(self, x):
+        x = F.pad(x, (1, 1, 1, 1))
+        z = self.mon(x)
+        z = F.avg_pool2d(z[-1], self.pool)
+        return self.Wout(z.view(z.shape[0], -1))
+
+
 class SingleConvNet(nn.Module):
 
     def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, **kwargs):

@@ -21,14 +21,14 @@ if __name__ == "__main__":
     # trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
     #                                               test_batch_size=128)
 
-    trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
-                                                  test_batch_size=128)
+    trainLoader, testLoader = train.cifar_loaders(train_batch_size=256,
+                                                  test_batch_size=256)
 
     epochs = 40
     seed = 1
     tol = 1E-2
     width = 20
-    lr_decay_steps = 20
+    lr_decay_steps = 10
     image_size = 32 * 32
 
     torch.manual_seed(seed)
@@ -49,9 +49,9 @@ if __name__ == "__main__":
                                      convNet,
                                      max_lr=1e-3,
                                      lr_mode='step',
-                                     step=25,
+                                     step=lr_decay_steps,
                                      change_mo=False,
-                                     epochs=20,
+                                     epochs=epochs,
                                      print_freq=100,
                                      tune_alpha=True)
 
@@ -76,9 +76,9 @@ if __name__ == "__main__":
                                      odeConvNet,
                                      max_lr=1e-3,
                                      lr_mode='step',
-                                     step=25,
+                                     step=lr_decay_steps,
                                      change_mo=False,
-                                     epochs=20,
+                                     epochs=epochs,
                                      print_freq=100,
                                      tune_alpha=True)
 

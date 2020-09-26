@@ -162,20 +162,67 @@ class MONSingleConv(nn.Module):
         return (g_out,)
 
     def init_inverse(self, alpha, beta):
-        A = self.A.weight / self.A.weight.view(-1).norm()
-        B = self.h * self.B.weight / self.B.weight.view(-1).norm()
-        Afft = init_fft_conv(A, self.shp)
-        Bfft = init_fft_conv(B, self.shp)
-        I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
-                      device=Afft.device)[None, :, :]
-        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft + Bfft - Bfft.transpose(1, 2)
-        self.Winv = torch.inverse(alpha * I + beta * self.Wfft)
+        # A = self.A.weight / self.A.weight.view(-1).norm()
+        # B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+        # Afft = init_fft_conv(A, self.shp)
+        # Bfft = init_fft_conv(B, self.shp)
+        # I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
+        #               device=Afft.device)[None, :, :]
+        # self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft + Bfft - Bfft.transpose(1, 2)
+        # self.Winv = torch.inverse(alpha * I + beta * self.Wfft)
+
+        # Store the value of alpha. This is bad code though...
+        self.alpha = -beta
+
+    # def inverse(self, *z):
+    #     return (fft_conv(z[0], self.Winv),)
+
+    # def inverse_transpose(self, *g):
+    #     return (fft_conv(g[0], self.Winv, transpose=True),)
 
     def inverse(self, *z):
-        return (fft_conv(z[0], self.Winv),)
+        alpha = self.alpha
+        with torch.no_grad():
+            A = self.A.weight / self.A.weight.view(-1).norm()
+            B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+
+            ztotal = z[0]
+            zn = z[0]
+            for n in range(200):
+                Az = F.conv2d(self.cpad(zn), A)
+                ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
+                Bz = F.conv2d(self.cpad(zn), B)
+                BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
+                zn = -alpha * (self.m * zn + self.g*ATAz - Bz + BTz)
+
+                ztotal += zn
+                if zn.norm() <= 0.001:
+                    # print(n, 'iterations')
+                    break
+
+        return ztotal
 
     def inverse_transpose(self, *g):
-        return (fft_conv(g[0], self.Winv, transpose=True),)
+        alpha = self.alpha
+        with torch.no_grad():
+            A = self.A.weight / self.A.weight.view(-1).norm()
+            B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+
+            ztotal = g[0]
+            zn = g[0]
+            for n in range(200):
+                Az = F.conv2d(self.cpad(zn), A)
+                ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
+                Bz = F.conv2d(self.cpad(zn), B)
+                BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
+                zn = -alpha * (self.m * zn + self.g*ATAz + Bz - BTz)
+
+                ztotal += zn
+                if zn.norm() <= 0.001:
+                    # print(n, 'iterations')
+                    break
+
+        return ztotal
 
 
 class MONBorderReLU(nn.Module):

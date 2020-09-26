@@ -1,6 +1,7 @@
 # virtual environment
 venv
 .vscode
+data/
 
 
 # Byte-compiled / optimized / DLL files
