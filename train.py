@@ -398,7 +398,7 @@ class  MultiConvNet(nn.Module):
 
 
 
-def test_robustness(model, testLoader):
+def test_robustness(model, testLoader, device='cuda'):
 
     maxIter = 1000
     model = model.eval()
@@ -426,9 +426,8 @@ def test_robustness(model, testLoader):
 
     # Estimate Lipschitz constant of model
     Lip = 0
-    u = torch.randn_like(batch[0][:, 0:1, :, :], requires_grad=True)
-    v = torch.randn_like(u, requires_grad=True)
-    u.requires_grad = True
+    u = torch.randn_like(batch[0][:, 0:1, :, :], requires_grad=True, device=device)
+    v = torch.randn_like(u, requires_grad=True, device=device)
 
     epsilons = np.linspace(1E-2, 5, 50)
     optimizer = torch.optim.Adam([u, v], lr=1E-2)
@@ -450,12 +449,12 @@ def test_robustness(model, testLoader):
                 break
 
     # Estimate Adversarial perturbations
-    u = batch[0][:, 0:1, :, :]
-    v = torch.randn_like(u, requires_grad=True)
+    u = cuda(batch[0][:, 0:1, :, :])
+    v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
     epsilons = np.linspace(1E-2, 10, 20)
-    optimizer = torch.optim.Adam([v], lr=1E-2)
+    optimizer = torch.optim.Adam([v], lr=1E-1)
 
     J = 0
     J_last = 1
@@ -478,7 +477,7 @@ def test_robustness(model, testLoader):
                 pert_size = v.norm(dim=(2, 3))
                 v.data[pert_size > epsilon] = v.data[pert_size > epsilon] * epsilon / pert_size[pert_size > epsilon, None, None]
 
-            if iter > 20:
+            if iter > 100:
                 if J <= J_last + 1E-4:
                     break
 

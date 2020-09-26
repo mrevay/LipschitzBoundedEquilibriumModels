@@ -15,12 +15,36 @@ import scipy.io as io
 import matplotlib.pyplot as plt
 
 
+class simple_fc(torch.nn.Module):
+    """ MON class with a single 3x3 (circular) convolution """
+
+    def __init__(self, in_dim, width, out_dim, path=None):
+        super().__init__()
+
+        self.Win = torch.nn.Linear(in_dim, width)
+        self.Wout = torch.nn.Linear(width, out_dim)
+
+        if path is not None:
+            data = io.loadmat(path)
+            self.Win.weight.data = torch.Tensor(data["W1"])
+            self.Win.bias.data = torch.Tensor(data["b1"][0])
+
+            self.Wout.weight.data = torch.Tensor(data["W2"])
+            self.Wout.bias.data = torch.Tensor(data["b2"][0])
+
+    def forward(self, x):
+        x = x.view(x.shape[0], -1)
+        x = self.Win(x) 
+        x = torch.relu(x)
+        return self.Wout(x)
+
+
 if __name__ == "__main__":
 
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
                                                   test_batch_size=2000)
 
-
+    path = './models/lmt_models'
     epochs = 40
     seed = 8
     tol = 1E-3
@@ -28,6 +52,49 @@ if __name__ == "__main__":
     lr_decay_steps = 20
 
     image_size = 28 * 28
+
+    # Load models trained via lipschitz margin training
+    # lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c0.mat')
+    # lmt0.cuda()
+    # res = train.test_robustness(lmt0, testLoader)
+    # name = 'lmt_c0_w{:d}'.format(width)
+    # io.savemat(path + name + '.mat', res)
+
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c1.mat')
+    lmt0.cuda()
+    res = train.test_robustness(lmt0, testLoader)
+    name = 'lmt_c1_w{:d}'.format(width)
+    io.savemat(path + name + '.mat', res)
+
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c10.0.mat')
+    lmt0.cuda()
+    res = train.test_robustness(lmt0, testLoader)
+    name = 'lmt_c10_w{:d}'.format(width)
+    io.savemat(path + name + '.mat', res)
+
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c100.0.mat')
+    lmt0.cuda()
+    res = train.test_robustness(lmt0, testLoader)
+    name = 'lmt_c100_w{:d}'.format(width)
+    io.savemat(path + name + '.mat', res)
+
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c250.0.mat')
+    lmt0.cuda()
+    res = train.test_robustness(lmt0, testLoader)
+    name = 'lmt_c250_w{:d}'.format(width)
+    io.savemat(path + name + '.mat', res)
+
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c500.0.mat')
+    lmt0.cuda()
+    res = train.test_robustness(lmt0, testLoader)
+    name = 'lmt_c500_w{:d}'.format(width)
+    io.savemat(path + name + '.mat', res)
+
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c1000.0.mat')
+    lmt0.cuda()
+    res = train.test_robustness(lmt0, testLoader)
+    name = 'lmt_c1000_w{:d}'.format(width)
+    io.savemat(path + name + '.mat', res)
 
     # Lipschitz Networks
     models = []
@@ -58,7 +125,7 @@ if __name__ == "__main__":
                                         tune_alpha=True)
 
         res = train.test_robustness(LipNet, testLoader)
-        path = './models/'
+       
         name = 'fc_lip{:2.1f}_w{:d}'.format(gamma, width)
         torch.save(LipNet.state_dict(), path + name + '.params')
         io.savemat(path + name + '.mat', res)

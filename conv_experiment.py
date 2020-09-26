@@ -24,10 +24,10 @@ if __name__ == "__main__":
     trainLoader, testLoader = train.cifar_loaders(train_batch_size=256,
                                                   test_batch_size=256)
 
-    epochs = 40
-    seed = 1
-    tol = 1E-2
-    width = 20
+    epochs = 30
+    seed = 3
+    tol = 1E-3
+    width = 81
     lr_decay_steps = 10
     image_size = 32 * 32
 
