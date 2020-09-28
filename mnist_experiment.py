@@ -42,8 +42,8 @@ class simple_fc(torch.nn.Module):
 
 if __name__ == "__main__":
 
-    trainLoader, testLoader = train.mnist_loaders(train_batch_size=512,
-                                                  test_batch_size=512)
+    trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
+                                                  test_batch_size=128)
 
     load_models = False
 
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     seed = 1
     tol = 1E-3
     width = 80
-    lr_decay_steps = 20
+    lr_decay_steps = 10
 
     image_size = 28 * 28
 

@@ -87,7 +87,8 @@ class NODEN_Lipschitz_Fc(nn.Module):
         self.V = nn.Linear(width, width, bias=False)
         self.S = nn.Linear(width, width, bias=False)
 
-        self.Lambda = nn.Parameter(torch.ones((width)))
+        # self.Lambda = nn.Parameter(torch.ones((width)))
+        self.psi = nn.Parameter(torch.ones((width)))
 
         self.G = torch.nn.Linear(width, out_dim)
 
@@ -131,16 +132,24 @@ class NODEN_Lipschitz_Fc(nn.Module):
 
     def W(self):
 
+        Psi = torch.exp(self.psi)
+
         Id = torch.eye(self.V.weight.shape[0], dtype=self.V.weight.dtype,
                        device=self.V.weight.device)
+
         VTV = self.V.weight.T @ self.V.weight + self.m * Id
         S = self.S.weight
         GTG = self.G.weight.T @ self.G.weight
-        BBT = self.Lambda.diag() @ self.B.weight @ self.B.weight.T @ self.Lambda.diag()
 
-        D = 2 * self.Lambda.diag() - GTG / self.gamma - BBT / self.gamma - VTV + S.T - S
-        Lambdainv = (1 / self.Lambda).diag()
-        W = 0.5 * Lambdainv @ D
+        # BBT = self.Lambda.diag() @ self.B.weight @ self.B.weight.T @ self.Lambda.diag()
+        Psi_inv = (1 / Psi).diag()
+        BBT = Psi_inv @ self.B.weight @ self.B.weight.T @ Psi_inv
+
+        # D = 2 * self.Lambda.diag() - GTG / self.gamma - BBT / self.gamma - VTV + S.T - S
+        # Lambdainv = (1 / self.Lambda).diag()
+        # W = 0.5 * Lambdainv @ D
+
+        W = Id - Psi.diag() @ (GTG / 2 / self.gamma + BBT / 2 / self.gamma + VTV + S.T - S)
         return W
 
 

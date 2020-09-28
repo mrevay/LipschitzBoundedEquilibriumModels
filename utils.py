@@ -80,3 +80,35 @@ def get_splitting_stats(dataLoader, model):
         data, target = cuda(batch[0]), cuda(batch[1])
         model(data)
         return model.mon.errs
+
+def uncpad(x, pad=1):
+    return x[..., pad:-pad, pad:-pad]
+
+def cpad(x, pad=1):
+    return torch.nn.functional.pad(x, (pad, pad, pad, pad), mode="circular")
+
+def avg_pool_adjoint(x, pool=4, pad=1):
+    """ Calculates the adjoint operator of the average pooling operation.
+     x is batch x channel x image_x x image_y """
+
+    kernel = torch.ones((1, 1, pool, pool), device=x.device)
+
+    adj = kron(x, kernel) / pool ** 2
+
+    return torch.nn.functional.pad(adj, (pad, pad, pad, pad))
+
+
+def kron(a, b):
+    """
+    A part of the pylabyk library: numpytorch.py at https://github.com/yulkang/pylabyk
+    
+    Kronecker product of matrices a and b with leading batch dimensions.
+    Batch dimensions are broadcast. The number of them mush
+    :type a: torch.Tensor
+    :type b: torch.Tensor
+    :rtype: torch.Tensor
+    """
+    siz1 = torch.Size(torch.tensor(a.shape[-2:]) * torch.tensor(b.shape[-2:]))
+    res = a.unsqueeze(-1).unsqueeze(-3) * b.unsqueeze(-2).unsqueeze(-4)
+    siz0 = res.shape[:-4]
+    return res.reshape(siz0 + siz1)

@@ -166,6 +166,30 @@ def run_tune_alpha(model, x, max_alpha):
     print("--------------\n")
 
 
+# def mnist_loaders(train_batch_size, test_batch_size=None):
+#     if test_batch_size is None:
+#         test_batch_size = train_batch_size
+
+#     trainLoader = torch.utils.data.DataLoader(
+#         dset.MNIST('data',
+#                    train=True,
+#                    download=True,
+#                    transform=transforms.Compose([
+#                        transforms.ToTensor()
+#                    ])),
+#         batch_size=train_batch_size,
+#         shuffle=True)
+
+#     testLoader = torch.utils.data.DataLoader(
+#         dset.MNIST('data',
+#                    train=False,
+#                    transform=transforms.Compose([
+#                        transforms.ToTensor()
+#                    ])),
+#         batch_size=test_batch_size,
+#         shuffle=False)
+#     return trainLoader, testLoader
+
 def mnist_loaders(train_batch_size, test_batch_size=None):
     if test_batch_size is None:
         test_batch_size = train_batch_size
@@ -441,7 +465,7 @@ class  MultiConvNet(nn.Module):
 
 
 
-def test_robustness(model, testLoader, device='cuda'):
+def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
     maxIter = 5000
     model = model.eval()
@@ -462,79 +486,60 @@ def test_robustness(model, testLoader, device='cuda'):
         test_loss /= len(testLoader.dataset)
         nTotal = len(testLoader.dataset)
         err = 100. * incorrect_val.float() / float(nTotal)
-        print('\n\nTest set: Average loss: {:.4f}, Error: {}/{} ({:.2f}%)'.format(
+        print('Test set: Average loss: {:.4f}, Error: {}/{} ({:.2f}%)'.format(
             test_loss, incorrect_val, nTotal, err))
 
     nominal_perf = err
 
     # Estimate Lipschitz constant of model
-    Lip = 0
-    u = torch.randn_like(batch[0][:, 0:1, :, :], requires_grad=True, device=device)
-    v = torch.randn_like(u, requires_grad=True, device=device)
+    if check_Lipschitz:
+        Lip = 0
+        u = torch.randn_like(batch[0][:, 0:1, :, :], requires_grad=True, device=device)
+        v = torch.randn_like(u, requires_grad=True, device=device)
 
-    epsilons = np.linspace(1E-2, 5, 50)
-    optimizer = torch.optim.Adam([u, v], lr=1E-2)
-    for iter in range(maxIter):
-        optimizer.zero_grad()
-        y1 = model(u)
-        y2 = model(u + v)
 
-        Lip_last = Lip
-        Lip = (y1 - y2).norm(dim=1) ** 2 / v.view([v.shape[0], -1]).norm(dim=1) **2
-        Obj = -Lip.sum()
-        Obj.backward()
-        optimizer.step()
+        optimizer = torch.optim.Adam([u, v], lr=5E-3)
+        for iter in range(maxIter):
+            optimizer.zero_grad()
+            y1 = model(u)
+            y2 = model(u + v)
 
-        print(Lip.max().sqrt().item())
+            Lip_last = Lip
+            Lip = (y1 - y2).norm(dim=1) ** 2 / v.view([v.shape[0], -1]).norm(dim=1) ** 2
+            Obj = -Lip.sum()
+            Obj.backward()
+            optimizer.step()
 
-        if iter > 500:
-            if Lip.max() < Lip_last.max() + 1E-8:
-                break
+            print('\rLipschitz constant: {:1.3f}'.format(Lip.max().sqrt().item()), sep=' ', end='', flush=True)
+
+            if iter > 200:
+                if Lip.max() < Lip_last.max() + 1E-8:
+                    break
+        print()
+        print()
 
     # Estimate Adversarial perturbations
+    epsilons = np.linspace(1E-2, 5, 50)
     u = cuda(batch[0][:, 0:1, :, :])
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(1E-2, 20, 40)
-
+    epsilons = np.linspace(1E-2, 10, 40)
     errors = []
 
     # Perform adversarial attacks
-    fmodel = fb.PyTorchModel(model, bounds=(0, 1))
+    bound_a = -0.1307 / 0.3081  # Calc. bound on pixel val due to normalization
+    bound_b = (1 - 0.1307) / 0.3081
+    fmodel = fb.PyTorchModel(model, bounds=(bound_a, bound_b))
     # attack = fb.attacks.L2ProjectedGradientDescentAttack()
-    attack = fb.attacks.L2BasicIterativeAttack()
-    _, advs, success = attack(fmodel, u, target, epsilons=epsilons)
-
-    # for idx, epsilon in enumerate(epsilons):
-    #     # Calculate an adersarial perterbation of size epsilon
-    #     for iter in range(maxIter):
-    #         optimizer.zero_grad()
-    #         preds = model(u + v)
-
-    #         ce_loss = -nn.CrossEntropyLoss(reduction='sum')(preds, target)
-
-    #         ce_loss.backward()
-    #         optimizer.step()
-
-    #         J_last = J
-    #         J = -ce_loss.item()
-
-    #         with torch.no_grad():
-    #             pert_size = v.norm(dim=(2, 3))
-    #             v.data[pert_size > epsilon] = v.data[pert_size > epsilon] * epsilon / pert_size[pert_size > epsilon, None, None]
-
-    #         if iter > 100:
-    #             if J <= J_last + 1E-4:
-    #                 break
-
-    #     # Calculate the number of incorrect predictions with the adversarial pert.
-    #     incorrect_val = preds.float().argmax(1).ne(target.data).sum()
-    #     err = 100. * incorrect_val.float() / preds.shape[0]
-    #     print(err.item())
-    #     errors.append(err.item())
+    # attack = fb.attacks.L2DeepFoolAttack()
+    attack = fb.attacks.L2FastGradientAttack()
+    # attack = fb.attacks.L2CarliniWagnerAttack()
+    raw, advs, success = attack(fmodel, u, target, epsilons=epsilons)
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
-    results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
+
+    # results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
+    results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors}
 
     return results
