@@ -18,27 +18,69 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
 
-    # trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-    #                                               test_batch_size=128)
+    dataset = "mnist"
+    if dataset == "mnist":
+        trainLoader, testLoader = train.mnist_loaders(train_batch_size=512,
+                                                      test_batch_size=512)
+        in_dim = 28
+        in_channels = 1
+    elif dataset == "cifar":
+        trainLoader, testLoader = train.cifar_loaders(train_batch_size=256,
+                                                      test_batch_size=256)
+        in_dim = 32
+        in_channels = 3
 
-    trainLoader, testLoader = train.cifar_loaders(train_batch_size=256,
-                                                  test_batch_size=256)
-
-    epochs = 30
-    seed = 3
+    gamma = 0.3
+    epochs = 5
+    seed = 4
     tol = 1E-3
-    width = 81
+    width = 20
     lr_decay_steps = 10
-    image_size = 32 * 32
 
     torch.manual_seed(seed)
     numpy.random.seed(seed)
 
+    # Lipschitz network network
+    torch.manual_seed(seed)
+    numpy.random.seed(seed)
+
+    odeConvNet = train.Noden_LipschitzConvNet(sp.MONForwardBackwardSplitting,
+                                              in_dim=in_dim,
+                                              in_channels=in_channels,
+                                              out_channels=width,
+                                              alpha=0.5,
+                                              max_iter=600,
+                                              tol=1e-3,
+                                              m=1,
+                                              gamma=gamma)
+
+    # odeConvNet.load_state_dict(torch.load( './models/lipschitz0.3_conv_w20.params'))
+    # odeConvNet.to('cuda')
+    # res = train.test_robustness(odeConvNet, testLoader)
+    # io.savemat(path + name + '.mat', res)
+
+
+    ode_train, ode_val = train.train(trainLoader, testLoader,
+                                     odeConvNet,
+                                     max_lr=1e-3,
+                                     lr_mode='step',
+                                     step=lr_decay_steps,
+                                     change_mo=False,
+                                     epochs=epochs,
+                                     print_freq=100,
+                                     tune_alpha=True)
+
+    path = './models/'
+    name = 'lipschitz{:1.1f}_conv_w{:d}'.format(gamma, width)
+    torch.save(odeConvNet.state_dict(), path + name + '.params')
+
+    res = train.test_robustness(lmt0, testLoader)
+    io.savemat(path + name + '.mat', res)
 
     # Test Zico's convnet
     convNet = train.SingleConvNet(sp.MONForwardBackwardSplitting,
-                                  in_dim=32,
-                                  in_channels=3,
+                                  in_dim=in_dim,
+                                  in_channels=in_channels,
                                   out_channels=width,
                                   alpha=1.0,
                                   max_iter=300,
@@ -64,8 +106,8 @@ if __name__ == "__main__":
     numpy.random.seed(seed)
 
     odeConvNet = train.NodenConvNet(sp.MONForwardBackwardSplitting,
-                                    in_dim=32,
-                                    in_channels=3,
+                                    in_dim=in_dim,
+                                    in_channels=in_channels,
                                     out_channels=width,
                                     alpha=1.0,
                                     max_iter=300,

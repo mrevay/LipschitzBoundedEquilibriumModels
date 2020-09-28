@@ -11,10 +11,13 @@ import time
 
 import matplotlib.pyplot as plt
 
+import utils
 import NODEN
 
 # torch.set_default_dtype(torch.float64)  # double precision for SDP
 # torch.set_printoptions(precision=4)
+
+
 
 def cuda(tensor):
     if torch.cuda.is_available():
@@ -93,6 +96,8 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
 
             if hasattr(model.mon.linear_module, 'Lambda'):
                 model.mon.linear_module.Lambda.data[model.mon.linear_module.Lambda.data <= 1E-3] = 1E-3
+            if hasattr(model.mon.linear_module, 'Psi'):
+                model.mon.linear_module.Psi.data[model.mon.linear_module.Psi.data <= 1E-3] = 1E-3
 
         if lr_mode == 'step':
             lr_scheduler.step()
@@ -304,6 +309,21 @@ class NODEN_Lip_Net(nn.Module):
         y = self.mon.linear_module.G(z[-1])
         return y
 
+
+class MON_Lip_Net(nn.Module):
+
+    def __init__(self, splittingMethod, gamma, in_dim=784, width=100, out_dim=10, m=0.1, **kwargs):
+        super().__init__()
+        linear_module = NODEN.Lipschitz_mon(in_dim, width, out_dim, gamma, m=m)
+        nonlin_module = NODEN.NODEN_ReLU()
+        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+
+    def forward(self, x):
+        x = x.view(x.shape[0], -1)
+        z = self.mon(x)
+        y = self.mon.linear_module.G(z[-1])
+        return y
+
 class NODENFcNet_uncon(nn.Module):
 
     def __init__(self, splittingMethod, in_dim=784, out_dim=100, m=0.1, **kwargs):
@@ -346,7 +366,7 @@ class Noden_LipschitzConvNet(nn.Module):
         shp = (n, n)
         self.pool = 4
         self.out_dim = out_channels * (n // self.pool) ** 2
-        linear_module = NODEN.NODEN_Lipschitz_Conv(in_dim, in_channels, out_channels, self.out_dim, gamma, shp, m=m)
+        linear_module = NODEN.NODEN_Lipschitz_Conv(in_dim, in_channels, out_channels, self.out_dim, gamma, shp, m=m, pool=4)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
         self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         self.Wout = nn.Linear(self.out_dim, 10)
@@ -376,6 +396,27 @@ class SingleConvNet(nn.Module):
         z = self.mon(x)
         z = F.avg_pool2d(z[-1], self.pool)
         return self.Wout(z.view(z.shape[0], -1))
+
+    # def forward(self, x):
+    #     batch = 1
+    #     channel = 1
+
+    #     x = F.pad(x, (1, 1, 1, 1))
+    #     z = self.mon(x)
+    #     Mx = F.avg_pool2d(z[-1], self.pool)
+
+    #     # MTMx = utils.avg_pool_adjoint(Mx)
+    #     upsampler = torch.nn.Upsample(scale_factor=4)
+    #     MTMx = utils.cpad(upsampler(Mx)) / 16
+
+    #     # Compare innner product
+    #     xTMTMx1 = z[-1][batch, channel].reshape(-1, 1).T @ MTMx[batch, channel].reshape(-1, 1)
+    #     xTMTMx2 = Mx[batch, channel].reshape(-1, 1).T @ Mx[batch, channel].reshape(-1, 1)
+
+    #     print("(xT) (MTMx)", xTMTMx1)
+    #     print("(xTMT)(Mx))", xTMTMx2)
+
+    #     return self.Wout(z.view(z.shape[0], -1))
 
 
 class  MultiConvNet(nn.Module):
@@ -437,7 +478,7 @@ def test_robustness(model, testLoader, device='cuda'):
         y2 = model(u + v)
 
         Lip_last = Lip
-        Lip = (y1 - y2).norm(dim=1) **2 / v.view([2000, -1]).norm(dim=1) **2
+        Lip = (y1 - y2).norm(dim=1) **2 / v.view([v.shape[0], -1]).norm(dim=1) **2
         Obj = -Lip.sum()
         Obj.backward()
         optimizer.step()

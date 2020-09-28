@@ -44,7 +44,7 @@ if __name__ == "__main__":
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
                                                   test_batch_size=2000)
 
-    path = './models/lmt_models'
+    path = './models/'
     epochs = 40
     seed = 8
     tol = 1E-3
@@ -53,12 +53,44 @@ if __name__ == "__main__":
 
     image_size = 28 * 28
 
-    # Load models trained via lipschitz margin training
-    # lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c0.mat')
-    # lmt0.cuda()
-    # res = train.test_robustness(lmt0, testLoader)
-    # name = 'lmt_c0_w{:d}'.format(width)
-    # io.savemat(path + name + '.mat', res)
+
+    # Lipschitz Networks
+    models = []
+    results = []
+    for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
+
+        torch.manual_seed(seed)
+        numpy.random.seed(seed)
+
+        LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
+                                    in_dim=image_size,
+                                    width=width,
+                                    out_dim=10,
+                                    alpha=1.0,
+                                    max_iter=300,
+                                    tol=tol,
+                                    m=1.0,
+                                    gamma=gamma)
+
+        lip_train, lip_test = train.train(trainLoader, testLoader,
+                                        LipNet,
+                                        max_lr=1e-3,
+                                        lr_mode='step',
+                                        step=lr_decay_steps,
+                                        change_mo=False,
+                                        epochs=epochs,
+                                        print_freq=100,
+                                        tune_alpha=True)
+
+        res = train.test_robustness(LipNet, testLoader)
+       
+        name = 'mon_lip{:2.1f}_w{:d}'.format(gamma, width)
+        torch.save(LipNet.state_dict(), path + name + '.params')
+        io.savemat(path + name + '.mat', res)
+
+        models += [LipNet]
+        results += [res]
+
 
     lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c1.mat')
     lmt0.cuda()

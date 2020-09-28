@@ -4,6 +4,76 @@ import torch.nn.functional as F
 import numpy as np
 
 
+class Lipschitz_mon(nn.Module):
+    """ Simple MON linear class, just a single full multiply. """
+
+    def __init__(self, in_dim, width, out_dim, gamma, m=1.0):
+        super().__init__()
+
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+
+        self.B = nn.Linear(in_dim, width)
+        self.V = nn.Linear(width, width, bias=False)
+        self.S = nn.Linear(width, width, bias=False)
+
+        self.Lambda = torch.ones((width))
+
+        self.G = torch.nn.Linear(width, out_dim)
+
+        self.gamma = gamma
+        self.m = m
+        self.epsilon = 1E-5
+
+    def x_shape(self, n_batch):
+        return (n_batch, self.U.in_features)
+
+    def z_shape(self, n_batch):
+        return ((n_batch, self.V.in_features),)
+
+    def forward(self, x, *z):
+        return (self.B(x) + self.multiply(*z)[0],)
+
+    def bias(self, x):
+        return (self.B(x),)
+
+    def multiply(self, *z):
+
+        z_out = z[0] @ self.W().T
+        return (z_out,)
+
+    def multiply_transpose(self, *g):
+        g_out = g[0] @ self.W()
+        return (g_out,)
+
+    def init_inverse(self, alpha, beta):
+        Id = torch.eye(self.V.weight.shape[0], dtype=self.V.weight.dtype,
+                       device=self.V.weight.device)
+
+        W = self.W()
+        self.Winv = torch.inverse(alpha * Id + beta * W)
+
+    def inverse(self, *z):
+        return (z[0] @ self.Winv.transpose(0, 1),)
+
+    def inverse_transpose(self, *g):
+        return (g[0] @ self.Winv,)
+
+    def W(self):
+
+        Id = torch.eye(self.V.weight.shape[0], dtype=self.V.weight.dtype,
+                       device=self.V.weight.device)
+        VTV = self.V.weight.T @ self.V.weight + self.m * Id
+        S = self.S.weight
+        GTG = self.G.weight.T @ self.G.weight
+        BBT = self.Lambda.diag() @ self.B.weight @ self.B.weight.T @ self.Lambda.diag()
+
+        D = 2 * self.Lambda.diag() - GTG / self.gamma - BBT / self.gamma - VTV + S.T - S
+        Lambdainv = (1 / self.Lambda).diag()
+        W = 0.5 * Lambdainv @ D
+        return W
+
+
 class NODEN_Lipschitz_Fc(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
 
@@ -206,7 +276,7 @@ class NODEN_SingleFc_uncon(nn.Module):
 class NODEN_Lipschitz_Conv(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
 
-    def __init__(self, in_dim, in_channels, out_channels, out_dim, gamma, shp, kernel_size=3, m=0.1):
+    def __init__(self, in_dim, in_channels, out_channels, out_dim, gamma, shp, kernel_size=3, m=0.1, pool=4):
         super().__init__()
         self.U = nn.Conv2d(in_channels, out_channels, kernel_size)
         self.A = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
@@ -217,9 +287,11 @@ class NODEN_Lipschitz_Conv(nn.Module):
         self.shp = shp
         self.m = m
         self.gamma = gamma
-        self.Wout = nn.Linear(out_dim, 10)
 
-        self.Lambda = nn.Parameter(torch.ones((1, out_channels, in_dim+2, in_dim+2)))
+        self.Wout = nn.Linear(out_dim, 10, bias=False)
+        self.pool = pool
+
+        self.Psi = nn.Parameter(torch.ones((1, out_channels, in_dim+2, in_dim+2)))
 
     def cpad(self, x):
         return F.pad(x, self.pad, mode="circular")
@@ -240,38 +312,63 @@ class NODEN_Lipschitz_Conv(nn.Module):
     def bias(self, x):
         return (F.conv2d(self.cpad(x), self.U.weight, self.U.bias),)
 
+    def pool_adjoint(self, x):
+        'Calculate the adjoint of average pooling operator'
+        adj = torch.nn.functional.upsample(x, scale_factor=4) / 16
+        return self.cpad(adj)
+
     def multiply(self, *z):
-
-        Id = torch.eye(self.V.weight.shape[0], dtype=self.V.weight.dtype,
-                       device=self.V.weight.device)
-        # VTV = self.V.weight.T @ self.V.weight + self.m * z[0]
-        S = self.S.weight
-        GTG = self.G.weight.T @ self.G.weight
-        BBT = self.Lambda.diag() @ self.B.weight @ self.B.weight.T @ self.Lambda.diag()
-
-        D = 2 * self.Lambda.diag() - GTG / self.gamma - BBT / self.gamma - VTV + S.T - S
-        Lambdainv = (1 / self.Lambda).diag()
-        W = 0.5 * Lambdainv @ D
-
 
         A = self.A.weight / self.A.weight.view(-1).norm()
         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+        U = self.U.weight / self.U.weight.view(-1).norm()
+        G = self.Wout.weight
+
         Az = F.conv2d(self.cpad(z[0]), A)
         ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A)) + self.m * z[0]
         Bz = F.conv2d(self.cpad(z[0]), B)
         BTz = self.uncpad(F.conv_transpose2d(self.cpad(z[0]), B))
-        z_out = z[0] - self.Lambda * (self.g * ATAz - Bz + BTz + self.m * z[0])
+
+        # Calculate term Lambda B B^T Lambda z
+        UTz = F.conv_transpose2d(self.cpad(z[0] / self.Psi), U)
+        UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U)) / self.Psi
+
+        # Calculate term G^T G z
+        pz = F.avg_pool2d(z[0], self.pool)
+        GTGpz = pz.view(z[0].shape[0], -1) @ G.T @ G
+        GTGz = self.pool_adjoint(GTGpz.view_as(pz))
+
+        # z_out = (2 * self.Lambda - GTGz / self.gamma - UUTz / self.gamma - ATAz + BTz - Bz) / 2 / self.Lambda
+        z_out = z[0] - self.Psi * (GTGz / self.gamma + UUTz / self.gamma + ATAz + BTz - Bz) / 2
+
         return (z_out,)
 
     def multiply_transpose(self, *g):
+        gp = g[0] * self.Psi
+
         A = self.A.weight / self.A.weight.view(-1).norm()
         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
-        Ag = F.conv2d(self.cpad(g[0]), A)
-        ATAg = self.uncpad(F.conv_transpose2d(self.cpad(Ag), A))
-        Bg = F.conv2d(self.cpad(g[0]), B)
-        BTg = self.uncpad(F.conv_transpose2d(self.cpad(g[0]), B))
-        g_out = g[0] - self.g * (ATAg + Bg - BTg + self.m * g[0]) * self.Lambda
-        return (g_out,)
+        U = self.U.weight / self.U.weight.view(-1).norm()
+        G = self.Wout.weight
+
+        Az = F.conv2d(self.cpad(gp), A)
+        ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A)) + self.m * gp
+        Bz = F.conv2d(self.cpad(gp), B)
+        BTz = self.uncpad(F.conv_transpose2d(self.cpad(gp), B))
+
+        # Calculate term Lambda B B^T Lambda z
+        UTz = F.conv_transpose2d(self.cpad(gp / self.Psi), U)
+        UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U)) / self.Psi
+
+        # Calculate term G^T G z
+        pz = F.avg_pool2d(gp, self.pool)
+        GTGpz = pz.view(gp.shape[0], -1) @ G.T @ G
+        GTGz = self.pool_adjoint(GTGpz.view_as(pz))
+
+        # z_out = (2 * self.Lambda - GTGz / self.gamma - UUTz / self.gamma - ATAz + BTz - Bz) / 2 / self.Lambda
+        z_out = g[0] - (GTGz / self.gamma + UUTz / self.gamma + ATAz - BTz + Bz) / 2
+
+        return (z_out,)
 
     def init_inverse(self, alpha, beta):
         # A = self.A.weight / self.A.weight.view(-1).norm()
@@ -287,30 +384,30 @@ class NODEN_Lipschitz_Conv(nn.Module):
         self.alpha = -beta
 
 
-    def inverse_transpose(self, *g):
-        return (fft_conv(g[0], self.Winv, transpose=True),)
+    # def inverse_transpose(self, *g):
+    #     return (fft_conv(g[0], self.Winv, transpose=True),)
 
-    def inverse(self, *z):
-        alpha = self.alpha
-        with torch.no_grad():
-            A = self.A.weight / self.A.weight.view(-1).norm()
-            B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+    # def inverse(self, *z):
+    #     alpha = self.alpha
+    #     with torch.no_grad():
+    #         A = self.A.weight / self.A.weight.view(-1).norm()
+    #         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
 
-            ztotal = z[0]
-            zn = z[0]
-            for n in range(200):
-                Az = F.conv2d(self.cpad(zn), A)
-                ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
-                Bz = F.conv2d(self.cpad(zn), B)
-                BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
-                zn = -alpha * (self.m * zn + self.g*ATAz - Bz + BTz)
+    #         ztotal = z[0]
+    #         zn = z[0]
+    #         for n in range(200):
+    #             Az = F.conv2d(self.cpad(zn), A)
+    #             ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
+    #             Bz = F.conv2d(self.cpad(zn), B)
+    #             BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
+    #             zn = -alpha * (self.m * zn + self.g*ATAz - Bz + BTz)
 
-                ztotal += zn
-                if zn.norm() <= 0.01:
-                    # print(n, 'iterations')
-                    break
+    #             ztotal += zn
+    #             if zn.norm() <= 0.01:
+    #                 # print(n, 'iterations')
+    #                 break
 
-        return ztotal
+    #     return ztotal
 
 
 class NODEN_Conv(nn.Module):
@@ -327,7 +424,7 @@ class NODEN_Conv(nn.Module):
         self.shp = shp
         self.m = m
 
-        self.Lambda = nn.Parameter(torch.ones((1, out_channels, in_dim+2, in_dim+2)))
+        self.Psi = nn.Parameter(torch.ones((1, out_channels, in_dim+2, in_dim+2)))
 
     def cpad(self, x):
         return F.pad(x, self.pad, mode="circular")
@@ -355,11 +452,11 @@ class NODEN_Conv(nn.Module):
         ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
         Bz = F.conv2d(self.cpad(z[0]), B)
         BTz = self.uncpad(F.conv_transpose2d(self.cpad(z[0]), B))
-        z_out = z[0] - self.Lambda * (self.g * ATAz - Bz + BTz + self.m * z[0])
+        z_out = z[0] - self.Psi * (self.g * ATAz - Bz + BTz + self.m * z[0])
         return (z_out,)
 
     def multiply_transpose(self, *g):
-        gp = self.Lambda * g[0]
+        gp = self.Psi * g[0]
         A = self.A.weight / self.A.weight.view(-1).norm()
         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
         Ag = F.conv2d(self.cpad(gp), A)
@@ -383,30 +480,30 @@ class NODEN_Conv(nn.Module):
         self.alpha = -beta
 
 
-    def inverse_transpose(self, *g):
-        return (fft_conv(g[0], self.Winv, transpose=True),)
+    # def inverse_transpose(self, *g):
+    #     return (fft_conv(g[0], self.Winv, transpose=True),)
 
-    def inverse(self, *z):
-        alpha = self.alpha
-        with torch.no_grad():
-            A = self.A.weight / self.A.weight.view(-1).norm()
-            B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+    # def inverse(self, *z):
+    #     alpha = self.alpha
+    #     with torch.no_grad():
+    #         A = self.A.weight / self.A.weight.view(-1).norm()
+    #         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
 
-            ztotal = z[0]
-            zn = z[0]
-            for n in range(200):
-                Az = F.conv2d(self.cpad(zn), A)
-                ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
-                Bz = F.conv2d(self.cpad(zn), B)
-                BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
-                zn = -alpha * (self.m * zn + self.g*ATAz - Bz + BTz)
+    #         ztotal = z[0]
+    #         zn = z[0]
+    #         for n in range(200):
+    #             Az = F.conv2d(self.cpad(zn), A)
+    #             ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
+    #             Bz = F.conv2d(self.cpad(zn), B)
+    #             BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
+    #             zn = -alpha * (self.m * zn + self.g*ATAz - Bz + BTz)
 
-                ztotal += zn
-                if zn.norm() <= 0.01:
-                    # print(n, 'iterations')
-                    break
+    #             ztotal += zn
+    #             if zn.norm() <= 0.01:
+    #                 # print(n, 'iterations')
+    #                 break
 
-        return ztotal
+    #     return ztotal
 
 
 class NODEN_ReLU(nn.Module):
