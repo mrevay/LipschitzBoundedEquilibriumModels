@@ -544,7 +544,6 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
 
-    # results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
-    results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors}
+    results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
 
     return results

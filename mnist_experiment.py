@@ -62,6 +62,7 @@ if __name__ == "__main__":
     models = []
     results = []
     for gamma in [0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
+    # for gamma in [0.1]:
 
         torch.manual_seed(seed)
         numpy.random.seed(seed)
