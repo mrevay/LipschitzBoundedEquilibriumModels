@@ -43,14 +43,14 @@ class simple_fc(torch.nn.Module):
 if __name__ == "__main__":
 
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-                                                  test_batch_size=128)
+                                                  test_batch_size=4000)
 
-    load_models = False
+    load_models = True
 
     path = './models/'
     epochs = 40
     seed = 1
-    tol = 1E-3
+    tol = 1E-5  # Turn up tolerance when concerned about Lipschitz bound.
     width = 80
     lr_decay_steps = 10
 

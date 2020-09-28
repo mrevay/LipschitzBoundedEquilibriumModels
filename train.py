@@ -497,9 +497,9 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
         u = torch.randn_like(batch[0][:, 0:1, :, :], requires_grad=True, device=device)
         v = torch.randn_like(u, requires_grad=True, device=device)
 
-
-        optimizer = torch.optim.Adam([u, v], lr=5E-3)
-        for iter in range(maxIter):
+        optimizer = torch.optim.Adam([u, v], lr=1E-2)
+        iter = 0
+        while iter < maxIter:
             optimizer.zero_grad()
             y1 = model(u)
             y2 = model(u + v)
@@ -512,9 +512,14 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
             print('\rLipschitz constant: {:1.3f}'.format(Lip.max().sqrt().item()), sep=' ', end='', flush=True)
 
-            if iter > 200:
-                if Lip.max() < Lip_last.max() + 1E-8:
-                    break
+            iter += 1
+            if iter > 25:
+                if Lip.max() < Lip_last.max() + 1E-4:  # Smaller than 1E-4 round-off error?
+                    optimizer.param_groups[0]["lr"] /= 10.0
+                    iter = 0
+
+                    if optimizer.param_groups[0]["lr"] <= 1E-5:
+                        break
         print()
         print()
 
@@ -524,7 +529,7 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(1E-2, 10, 40)
+    epsilons = np.linspace(1E-2, 15, 40)
     errors = []
 
     # Perform adversarial attacks
