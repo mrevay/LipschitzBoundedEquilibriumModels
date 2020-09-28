@@ -32,8 +32,9 @@ class simple_fc(torch.nn.Module):
             self.Wout.weight.data = torch.Tensor(data["W2"])
             self.Wout.bias.data = torch.Tensor(data["b2"][0])
 
+
     def forward(self, x):
-        x = x.view(x.shape[0], -1)
+        x = x.view(x.shape[0], -1) * 0.3081 + 0.1307
         x = self.Win(x) 
         x = torch.relu(x)
         return self.Wout(x)
@@ -41,14 +42,14 @@ class simple_fc(torch.nn.Module):
 
 if __name__ == "__main__":
 
-    trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-                                                  test_batch_size=2000)
+    trainLoader, testLoader = train.mnist_loaders(train_batch_size=512,
+                                                  test_batch_size=512)
 
-    load_models = True
+    load_models = False
 
     path = './models/'
     epochs = 40
-    seed = 8
+    seed = 1
     tol = 1E-3
     width = 80
     lr_decay_steps = 20
@@ -56,42 +57,6 @@ if __name__ == "__main__":
     image_size = 28 * 28
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c1.mat')
-    lmt0.cuda()
-    res = train.test_robustness(lmt0, testLoader)
-    name = 'lmt_c1_w{:d}'.format(width)
-    io.savemat(path + name + '.mat', res)
-
-    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c10.0.mat')
-    lmt0.cuda()
-    res = train.test_robustness(lmt0, testLoader)
-    name = 'lmt_c10_w{:d}'.format(width)
-    io.savemat(path + name + '.mat', res)
-
-    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c100.0.mat')
-    lmt0.cuda()
-    res = train.test_robustness(lmt0, testLoader)
-    name = 'lmt_c100_w{:d}'.format(width)
-    io.savemat(path + name + '.mat', res)
-
-    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c250.0.mat')
-    lmt0.cuda()
-    res = train.test_robustness(lmt0, testLoader)
-    name = 'lmt_c250_w{:d}'.format(width)
-    io.savemat(path + name + '.mat', res)
-
-    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c500.0.mat')
-    lmt0.cuda()
-    res = train.test_robustness(lmt0, testLoader)
-    name = 'lmt_c500_w{:d}'.format(width)
-    io.savemat(path + name + '.mat', res)
-
-    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c1000.0.mat')
-    lmt0.cuda()
-    res = train.test_robustness(lmt0, testLoader)
-    name = 'lmt_c1000_w{:d}'.format(width)
-    io.savemat(path + name + '.mat', res)
 
     # Lipschitz Networks
     models = []
@@ -129,6 +94,7 @@ if __name__ == "__main__":
                                             tune_alpha=True)
             torch.save(LipNet.state_dict(), path + name + '.params')
 
+        print('Testing model: ', name)
         res = train.test_robustness(LipNet, testLoader)
         io.savemat(path + name + '.mat', res)
 
@@ -137,7 +103,6 @@ if __name__ == "__main__":
 
 
     # unconstrained network
-
     torch.manual_seed(seed)
     numpy.random.seed(seed)
 
@@ -196,7 +161,7 @@ if __name__ == "__main__":
                                         epochs=epochs,    
                                         print_freq=100,
                                         tune_alpha=True)
-        torch.save(unconNet.state_dict(), path + name + '.params')
+        torch.save(odeNet.state_dict(), path + name + '.params')
 
     res = train.test_robustness(odeNet, testLoader)
     io.savemat(path + name + '.mat', res)
@@ -230,30 +195,49 @@ if __name__ == "__main__":
                                         tune_alpha=True)
         torch.save(monNet.state_dict(), path + name + '.params')
 
-    res = train.test_robustness(odeNet, testLoader)
+    res = train.test_robustness(monNet, testLoader)
     io.savemat(path + name + '.mat', res)
 
-    # X = torch.randn(100, 3*32*32)
-    # Z = torch.randn(100, width)
+    name = 'lmt_c1_w{:d}'.format(width)
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c1.0.mat')
+    lmt0.cuda()
+    print('Testing model: ', name)
+    res = train.test_robustness(lmt0, testLoader)
+    io.savemat(path + name + '.mat', res)
 
-    # mon = monNet.mon.linear_module
-    # ode = odeNet.mon.linear_module
+    name = 'lmt_c10_w{:d}'.format(width)
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c10.0.mat')
+    lmt0.cuda()
+    print('Testing model: ', name)
+    res = train.test_robustness(lmt0, testLoader)
+    io.savemat(path + name + '.mat', res)
 
-    # ode.init_inverse(1, -1)
-    # mon.init_inverse(1, -1)
+    name = 'lmt_c100_w{:d}'.format(width)
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c100.0.mat')
+    lmt0.cuda()
+    print('Testing model: ', name)
+    res = train.test_robustness(lmt0, testLoader)
+    io.savemat(path + name + '.mat', res)
 
-    # print("multiply is the same: ", (mon.multiply(Z)[0] - ode.multiply(Z)[0]).norm().item() < 1E-3)
-    # print("multiply_tranpose is the same: ", (mon.multiply_transpose(Z)[0] - ode.multiply_transpose(Z)[0]).norm().item() < 1E-3)
-    # print("inverse is the same: ", (mon.inverse(Z)[0] - ode.inverse(Z)[0]).norm().item() < 1E-3)
-    # print("inverse transpose is the same: ", (mon.inverse_transpose(Z)[0] - ode.inverse_transpose(Z)[0]).norm().item() < 1E-3)
+    name = 'lmt_c250_w{:d}'.format(width)
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c250.0.mat')
+    lmt0.cuda()
+    print('Testing model: ', name)
+    res = train.test_robustness(lmt0, testLoader)
+    io.savemat(path + name + '.mat', res)
 
+    name = 'lmt_c500_w{:d}'.format(width)
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c500.0.mat')
+    lmt0.cuda()
+    print('Testing model: ', name)
+    res = train.test_robustness(lmt0, testLoader)
+    io.savemat(path + name + '.mat', res)
 
-
-    p1, = plt.plot(ode_train)
-    p2, = plt.plot(mon_train)
-    p3, = plt.plot(uncon_train)
-    plt.legend([p1, p2, p3], ["ode", "mon", "uncon"])
-    # plt.yscale('log')
-    plt.show()
+    name = 'lmt_c1000_w{:d}'.format(width)
+    lmt0 = simple_fc(image_size, width, 10, './models/lmt_models/mnist_weights_c1000.0.mat')
+    lmt0.cuda()
+    print('Testing model: ', name)
+    res = train.test_robustness(lmt0, testLoader)
+    io.savemat(path + name + '.mat', res)
 
     print('~fin~')
