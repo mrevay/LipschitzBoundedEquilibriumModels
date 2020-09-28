@@ -9,6 +9,8 @@ import mon
 import numpy as np
 import time
 
+import foolbox as fb
+
 import matplotlib.pyplot as plt
 
 import utils
@@ -441,7 +443,7 @@ class  MultiConvNet(nn.Module):
 
 def test_robustness(model, testLoader, device='cuda'):
 
-    maxIter = 1000
+    maxIter = 5000
     model = model.eval()
 
     # Test nominal performance.
@@ -478,15 +480,15 @@ def test_robustness(model, testLoader, device='cuda'):
         y2 = model(u + v)
 
         Lip_last = Lip
-        Lip = (y1 - y2).norm(dim=1) **2 / v.view([v.shape[0], -1]).norm(dim=1) **2
+        Lip = (y1 - y2).norm(dim=1) ** 2 / v.view([v.shape[0], -1]).norm(dim=1) **2
         Obj = -Lip.sum()
         Obj.backward()
         optimizer.step()
 
         print(Lip.max().sqrt().item())
 
-        if iter > 1:
-            if Lip.max() < Lip_last.max() + 1E-4:
+        if iter > 500:
+            if Lip.max() < Lip_last.max() + 1E-8:
                 break
 
     # Estimate Adversarial perturbations
@@ -494,40 +496,45 @@ def test_robustness(model, testLoader, device='cuda'):
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(1E-2, 10, 20)
-    optimizer = torch.optim.Adam([v], lr=1E-1)
+    epsilons = np.linspace(1E-2, 20, 40)
 
-    J = 0
-    J_last = 1
     errors = []
-    for idx, epsilon in enumerate(epsilons):
-        # Calculate an adersarial perterbation of size epsilon
-        for iter in range(maxIter):
-            optimizer.zero_grad()
-            preds = model(u + v)
 
-            ce_loss = -nn.CrossEntropyLoss(reduction='sum')(preds, target)
+    # Perform adversarial attacks
+    fmodel = fb.PyTorchModel(model, bounds=(0, 1))
+    # attack = fb.attacks.L2ProjectedGradientDescentAttack()
+    attack = fb.attacks.L2BasicIterativeAttack()
+    _, advs, success = attack(fmodel, u, target, epsilons=epsilons)
 
-            ce_loss.backward()
-            optimizer.step()
+    # for idx, epsilon in enumerate(epsilons):
+    #     # Calculate an adersarial perterbation of size epsilon
+    #     for iter in range(maxIter):
+    #         optimizer.zero_grad()
+    #         preds = model(u + v)
 
-            J_last = J
-            J = -ce_loss.item()
+    #         ce_loss = -nn.CrossEntropyLoss(reduction='sum')(preds, target)
 
-            with torch.no_grad():
-                pert_size = v.norm(dim=(2, 3))
-                v.data[pert_size > epsilon] = v.data[pert_size > epsilon] * epsilon / pert_size[pert_size > epsilon, None, None]
+    #         ce_loss.backward()
+    #         optimizer.step()
 
-            if iter > 100:
-                if J <= J_last + 1E-4:
-                    break
+    #         J_last = J
+    #         J = -ce_loss.item()
 
-        # Calculate the number of incorrect predictions with the adversarial pert.
-        incorrect_val = preds.float().argmax(1).ne(target.data).sum()
-        err = 100. * incorrect_val.float() / preds.shape[0]
-        print(err.item())
-        errors.append(err.item())
+    #         with torch.no_grad():
+    #             pert_size = v.norm(dim=(2, 3))
+    #             v.data[pert_size > epsilon] = v.data[pert_size > epsilon] * epsilon / pert_size[pert_size > epsilon, None, None]
 
-    results = {"nominal": nominal_perf, "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
+    #         if iter > 100:
+    #             if J <= J_last + 1E-4:
+    #                 break
+
+    #     # Calculate the number of incorrect predictions with the adversarial pert.
+    #     incorrect_val = preds.float().argmax(1).ne(target.data).sum()
+    #     err = 100. * incorrect_val.float() / preds.shape[0]
+    #     print(err.item())
+    #     errors.append(err.item())
+
+    errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
+    results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
 
     return results
