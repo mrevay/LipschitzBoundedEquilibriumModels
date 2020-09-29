@@ -217,6 +217,88 @@ class NODEN_SingleFc(nn.Module):
         return W
 
 
+class Uncon_Conv(nn.Module):
+    """ MON class with a single 3x3 (circular) convolution """
+
+    def __init__(self, in_channels, out_channels, shp, kernel_size=5, m=1.0):
+        super().__init__()
+
+        self.pad = 4 * ((kernel_size - 1) // 2,)
+        self.shp = shp
+        self.m = m
+        self.h = nn.Parameter(torch.tensor(1.))
+
+        self.U = nn.Conv2d(in_channels, out_channels, kernel_size)
+
+        # Initialize unconstrained W in the same way as mon and Lode
+        self.W = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
+
+
+
+    def cpad(self, x):
+        return F.pad(x, self.pad, mode="circular")
+
+    def uncpad(self, x):
+        return x[:, :, 2 * self.pad[0]:-2 * self.pad[1], 2 * self.pad[2]:-2 * self.pad[3]]
+
+    def x_shape(self, n_batch):
+        return (n_batch, self.U.in_channels, self.shp[0], self.shp[1])
+
+    def z_shape(self, n_batch):
+        return ((n_batch, self.W.in_channels, self.shp[0], self.shp[1]),)
+
+    def forward(self, x, *z):
+        # circular padding is broken in PyTorch
+        return (F.conv2d(self.cpad(x), self.U.weight, self.U.bias) + self.multiply(*z)[0],)
+
+    def bias(self, x):
+        return (F.conv2d(self.cpad(x), self.U.weight, self.U.bias),)
+
+    def multiply(self, *z):
+        W = self.h * self.W.weight / self.W.weight.view(-1).norm()
+        Wz = F.conv2d(self.cpad(z[0]), W)
+        z_out = Wz
+        return (z_out,)
+
+    def multiply_transpose(self, *g):
+        W = self.h * self.W.weight / self.W.weight.view(-1).norm()
+        Wz = self.uncpad(F.conv_transpose2d(self.cpad(g[0]), W))
+        g_out = Wz
+
+        return (g_out,)
+
+    def max_sv(self):
+
+        W = self.h * self.W.weight / self.W.weight.view(-1).norm()
+
+        Wfft = init_fft_conv(W, self.shp)
+        eye = torch.eye(Wfft.shape[1], dtype=Wfft.dtype,
+                        device=Wfft.device)[None, :, :]
+
+        ImW = eye - Wfft
+
+        return ImW.svd()[1].max()
+
+    # def init_inverse(self, alpha, beta):
+    #     A = self.A.weight / self.A.weight.view(-1).norm()
+    #     B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+    #     Afft = init_fft_conv(A, self.shp)
+    #     Bfft = init_fft_conv(B, self.shp)
+    #     I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
+    #                   device=Afft.device)[None, :, :]
+    #     self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft + Bfft - Bfft.transpose(1, 2)
+    #     self.Winv = torch.inverse(alpha * I + beta * self.Wfft)
+
+    #     # Store the value of alpha. This is bad code though...
+    #     self.alpha = -beta
+
+    def inverse(self, *z):
+        return (fft_conv(z[0], self.Winv),)
+
+    def inverse_transpose(self, *g):
+        return (fft_conv(g[0], self.Winv, transpose=True),)
+
+
 class NODEN_SingleFc_uncon(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
 

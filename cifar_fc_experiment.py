@@ -43,15 +43,15 @@ if __name__ == "__main__":
 
     # trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
     #                                               test_batch_size=4000)
-    trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-                                                    test_batch_size=4000)
+    trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
+                                                    test_batch_size=1000)
 
     load_models = False
 
     path = './models/cifar/'
     epochs = 40
     seed = 1
-    tol = 1E-5  # Turn up tolerance when concerned about Lipschitz bound.
+    tol = 1E-3  # Turn up tolerance when concerned about Lipschitz bound.
     width = 80
     lr_decay_steps = 10
 
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # Lipschitz Networks
     models = []
     results = []
-    for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
+    for gamma in [0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
 
         torch.manual_seed(seed)
         numpy.random.seed(seed)

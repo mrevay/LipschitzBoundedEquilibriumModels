@@ -170,7 +170,7 @@ class MONSingleConv(nn.Module):
         self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft + Bfft - Bfft.transpose(1, 2)
         ImW = I - self.Wfft
 
-        return ImW.svd_lowrank()[0]
+        return ImW.svd()[1]
 
     def init_inverse(self, alpha, beta):
         A = self.A.weight / self.A.weight.view(-1).norm()

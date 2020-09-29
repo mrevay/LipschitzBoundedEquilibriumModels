@@ -108,7 +108,7 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
             torch.save(model.state_dict(), model_path)
 
         print("Tot train time: {}".format(time.time() - start))
-        train_loss.append(100. * incorrect_train.float() / float(len(trainLoader.dataset)))
+        train_loss.append(100. * incorrect_train.cpu().item() / float(len(trainLoader.dataset)))
 
         start = time.time()
         v_loss = 0
@@ -129,7 +129,7 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
             print('\n\nTest set: Average loss: {:.4f}, Error: {}/{} ({:.2f}%)'.format(
                 test_loss, incorrect_val, nTotal, err))
 
-        val_loss.append(100. * incorrect_val.float() / float(nTotal))
+        val_loss.append(100. * incorrect_val.cpu().item() / float(nTotal))
 
         print("Tot test time: {}\n\n\n\n".format(time.time() - start))
 
@@ -423,6 +423,26 @@ class SingleConvNet(nn.Module):
         z = F.avg_pool2d(z[-1], self.pool)
         return self.Wout(z.view(z.shape[0], -1))
 
+
+class UnconConvNet(nn.Module):
+
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, **kwargs):
+        super().__init__()
+        n = in_dim + 2
+        shp = (n, n)
+        self.pool = 4
+        self.out_dim = out_channels * (n // self.pool) ** 2
+        linear_module = NODEN.Uncon_Conv(in_channels, out_channels, shp, m=m)
+        nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
+        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.Wout = nn.Linear(self.out_dim, 10)
+
+    def forward(self, x):
+        x = F.pad(x, (1, 1, 1, 1))
+        z = self.mon(x)
+        z = F.avg_pool2d(z[-1], self.pool)
+        return self.Wout(z.view(z.shape[0], -1))
+
     # def forward(self, x):
     #     batch = 1
     #     channel = 1
@@ -469,6 +489,11 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
     maxIter = 5000
     model = model.eval()
+    Lip_batches = 2000  # Number of points to use when calculating the LC
+
+    # Data is stored in weird order ...
+    channels = testLoader.dataset.data[0].shape[2]
+    dim = testLoader.dataset.data[0].shape[0]
 
     # Test nominal performance.
     test_loss = 0
@@ -494,7 +519,7 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
     # Estimate Lipschitz constant of model
     if check_Lipschitz:
         Lip = 0
-        u = torch.randn_like(batch[0][:, 0:1, :, :], requires_grad=True, device=device)
+        u = torch.randn((Lip_batches, channels, dim, dim), requires_grad=True, device=device)
         v = torch.randn_like(u, requires_grad=True, device=device)
 
         optimizer = torch.optim.Adam([u, v], lr=1E-2)
@@ -525,7 +550,7 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
     # Estimate Adversarial perturbations
     epsilons = np.linspace(1E-2, 5, 50)
-    u = cuda(batch[0][:, 0:1, :, :])
+    u = cuda(batch[0])
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
