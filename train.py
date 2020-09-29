@@ -166,31 +166,7 @@ def run_tune_alpha(model, x, max_alpha):
     print("--------------\n")
 
 
-# def mnist_loaders(train_batch_size, test_batch_size=None):
-#     if test_batch_size is None:
-#         test_batch_size = train_batch_size
-
-#     trainLoader = torch.utils.data.DataLoader(
-#         dset.MNIST('data',
-#                    train=True,
-#                    download=True,
-#                    transform=transforms.Compose([
-#                        transforms.ToTensor()
-#                    ])),
-#         batch_size=train_batch_size,
-#         shuffle=True)
-
-#     testLoader = torch.utils.data.DataLoader(
-#         dset.MNIST('data',
-#                    train=False,
-#                    transform=transforms.Compose([
-#                        transforms.ToTensor()
-#                    ])),
-#         batch_size=test_batch_size,
-#         shuffle=False)
-#     return trainLoader, testLoader
-
-def mnist_loaders(train_batch_size, test_batch_size=None):
+def mnist_loaders(train_batch_size, test_batch_size=None, swap_labels=0):
     if test_batch_size is None:
         test_batch_size = train_batch_size
 
@@ -487,13 +463,11 @@ class  MultiConvNet(nn.Module):
 
 def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
+    channels = 1
+    dim = 28
     maxIter = 5000
     model = model.eval()
     Lip_batches = 2000  # Number of points to use when calculating the LC
-
-    # Data is stored in weird order ...
-    channels = testLoader.dataset.data[0].shape[2]
-    dim = testLoader.dataset.data[0].shape[0]
 
     # Test nominal performance.
     test_loss = 0

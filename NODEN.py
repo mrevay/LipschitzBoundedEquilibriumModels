@@ -166,7 +166,7 @@ class NODEN_SingleFc(nn.Module):
         self.V = nn.Linear(out_dim, out_dim, bias=False)
         self.S = nn.Linear(out_dim, out_dim, bias=False)
 
-        self.Lambda = nn.Parameter(torch.ones((out_dim)))
+        self.psi = nn.Parameter(torch.zeros((out_dim)))
         # self.Lambda = (torch.ones((out_dim)))
         self.m = m
         self.epsilon = 1E-5
@@ -178,7 +178,6 @@ class NODEN_SingleFc(nn.Module):
         return ((n_batch, self.V.in_features),)
 
     def forward(self, x, *z):
-        self.Lambda.data[self.Lambda < self.epsilon] = self.epsilon
         return (self.U(x) + self.multiply(*z)[0],)
 
     def bias(self, x):
@@ -208,11 +207,13 @@ class NODEN_SingleFc(nn.Module):
 
     def W(self):
 
+        Psi = torch.exp(self.psi).diag()
         Id = torch.eye(self.V.weight.shape[0], dtype=self.V.weight.dtype,
                        device=self.V.weight.device)
         VTVz = self.V.weight.T @ self.V.weight + self.m * Id
         S = self.S.weight
-        W = Id - self.Lambda.diag() @ (VTVz + S.T - S)
+        # W = Id - self.Lambda.diag() @ (VTVz + S.T - S)
+        W = Id - Psi @ (VTVz + S.T - S)
 
         return W
 
@@ -232,8 +233,6 @@ class Uncon_Conv(nn.Module):
 
         # Initialize unconstrained W in the same way as mon and Lode
         self.W = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
-
-
 
     def cpad(self, x):
         return F.pad(x, self.pad, mode="circular")

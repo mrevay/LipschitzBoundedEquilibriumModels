@@ -40,34 +40,66 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     numpy.random.seed(seed)
 
-    # Test unconstrained convnet
-    unconNet = train.UnconConvNet(sp.FISTA,
-                                  in_dim=in_dim,
-                                  in_channels=in_channels,
-                                  out_channels=width,
-                                  alpha=0.5,
-                                  max_iter=300,
-                                  tol=1e-3,
-                                  m=1.0)
+    # # Test unconstrained convnet
+    # unconNet = train.UnconConvNet(sp.FISTA,
+    #                               in_dim=in_dim,
+    #                               in_channels=in_channels,
+    #                               out_channels=width,
+    #                               alpha=0.5,
+    #                               max_iter=300,
+    #                               tol=1e-3,
+    #                               m=1.0)
 
-    uncon_train, uncon_val = train.train(trainLoader, testLoader,
-                                         unconNet,
-                                         max_lr=1e-3,
-                                         lr_mode='step',
-                                         step=lr_decay_steps,
-                                         change_mo=False,
-                                         epochs=epochs,
-                                         print_freq=100,
-                                         tune_alpha=False)
+    # uncon_train, uncon_val = train.train(trainLoader, testLoader,
+    #                                      unconNet,
+    #                                      max_lr=1e-3,
+    #                                      lr_mode='step',
+    #                                      step=lr_decay_steps,
+    #                                      change_mo=False,
+    #                                      epochs=epochs,
+    #                                      print_freq=100,
+    #                                      tune_alpha=False)
 
     path = './models/conv_experiment/'
-    name = 'uncon_conv_w{:d}'.format(width)
-    torch.save(unconNet.state_dict(), path + name + '.params')
+    # name = 'uncon_conv_w{:d}'.format(width)
+    # torch.save(unconNet.state_dict(), path + name + '.params')
+
+    odeConvNet = train.NodenConvNet(sp.FISTA,
+                                    in_dim=in_dim,
+                                    in_channels=in_channels,
+                                    out_channels=width,
+                                    alpha=1.0,
+                                    max_iter=300,
+                                    tol=1e-3,
+                                    m=1.0)
+
+    X = torch.randn((1, 30 , 30))
+    pool = 4
+
+    def pooling(x): 
+        return torch.nn.functional.avg_pool2d(x, pool)
+
+    def cpad(x):
+        return torch.nn.functional.pad(x, 4*(1,), mode="circular")
+
+    def pool_adjoint(x):
+        'Calculate the adjoint of average pooling operator'
+        adj = torch.nn.functional.upsample(x, scale_factor=pool) / pool ** 2
+        return adj
+
+    Px = pooling(X)
+    PTPx = pool_adjoint(Px)
+
+    xPTPx1 = Px.T @ Px
+    xPTPx2 = X.T @ PTPx
+
+    print("(Px)* (Px): ", xPTPx1, 'x* (P*Px):', xPTPx2)
+
 
     torch.manual_seed(seed)
     numpy.random.seed(seed)
 
-    # Test Zico's convnet
+    # Test Zico and Winston convnet
     convNet = train.SingleConvNet(sp.FISTA,
                                   in_dim=in_dim,
                                   in_channels=in_channels,
@@ -76,6 +108,7 @@ if __name__ == "__main__":
                                   max_iter=300,
                                   tol=1e-3,
                                   m=1.0)
+
 
     mon_train, mon_val = train.train(trainLoader, testLoader,
                                      convNet,
