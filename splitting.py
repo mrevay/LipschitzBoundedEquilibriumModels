@@ -4,6 +4,130 @@ from torch.autograd import Function
 import utils
 import time
 
+import matplotlib.pyplot as plt
+
+class FISTA(nn.Module):
+
+    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=True):
+        super().__init__()
+        self.linear_module = linear_module
+        self.nonlin_module = nonlin_module
+        self.alpha = alpha
+        self.tol = tol
+        self.max_iter = max_iter
+        self.verbose = verbose
+        self.stats = utils.SplittingMethodStats()
+        self.save_abs_err = False
+
+    def forward(self, x):
+        """ Forward pass of the MON, find equilibrium using FISTA"""
+
+        start = time.time()
+
+        with torch.no_grad():
+            yk = tuple(torch.zeros(s, dtype=x.dtype, device=x.device)
+                      for s in self.linear_module.z_shape(x.shape[0]))
+            xk = tuple(torch.zeros(s, dtype=x.dtype, device=x.device)
+                       for s in self.linear_module.z_shape(x.shape[0]))
+            tk = torch.ones((1), device=x.device)
+
+            n = len(yk)
+            bias = self.linear_module.bias(x)
+
+            Id = torch.eye(yk[0].shape[1], device=x.device)
+
+            rho = self.linear_module.max_sv()
+
+            def eval_prox(z, rho=rho):
+                Wz = self.linear_module.multiply(*z)
+                Z = tuple( (1-1/rho) * z[i] + Wz[i] / rho + bias[i] / rho for i in range(n))
+                return self.nonlin_module(*Z)
+
+            err = 1.0
+            it = 0
+            errs = []
+            while (err > self.tol and it < self.max_iter):
+
+                # FISTA Algorithm
+                xkp = eval_prox(yk)
+                tkp = 0.5 * (1 + torch.sqrt(1 + 4 * tk ** 2))
+
+                yk = tuple(xkp[i] + (tk - 1) / (tkp) * (xkp[i] - xk[i]) for i in range(n))
+                xk = xkp
+
+                # if self.save_abs_err:
+                #     fn = self.nonlin_module(*self.linear_module(x, *zn))
+                #     err = sum((zn[i] - fn[i]).norm().item() / (zn[i].norm().item()) for i in range(n))
+                #     errs.append(err)
+                # else:
+                # err = sum((zn[i] - z[i]).norm().item() / (1e-6 + zn[i].norm().item()) for i in range(n))
+
+                fn = self.nonlin_module(*self.linear_module(x, *yk))
+                err = sum((yk[i] - fn[i]).norm().item() / (1e-6 + yk[i].norm().item()) for i in range(n))
+                errs.append(err)
+                z = yk
+                it = it + 1
+
+        if self.verbose:
+            print("Forward: ", it, err)
+
+        # Run the forward pass one more time, tracking gradients, then backward placeholder
+        zn = self.linear_module(x, *z)
+        zn = self.nonlin_module(*zn)
+
+        zn = self.Backward.apply(self, *zn)
+        self.stats.fwd_iters.update(it)
+        self.stats.fwd_time.update(time.time() - start)
+        self.errs = errs
+        return zn
+
+    class Backward(Function):
+        @staticmethod
+        def forward(ctx, splitter, *z):
+            ctx.splitter = splitter
+            ctx.save_for_backward(*z)
+            return z
+
+        @staticmethod
+        def backward(ctx, *g):
+            start = time.time()
+            sp = ctx.splitter
+            n = len(g)
+            z = ctx.saved_tensors
+            j = sp.nonlin_module.derivative(*z)
+            I = [j[i] == 0 for i in range(n)]
+            d = [(1 - j[i]) / j[i] for i in range(n)]
+            v = tuple(j[i] * g[i] for i in range(n))
+            u = tuple(torch.zeros(s, dtype=g[0].dtype, device=g[0].device)
+                      for s in sp.linear_module.z_shape(g[0].shape[0]))
+
+            err = 1.0
+            it = 0
+            errs = []
+            while (err > sp.tol and it < sp.max_iter):
+                un = sp.linear_module.multiply_transpose(*u)
+                un = tuple((1 - sp.alpha) * u[i] + sp.alpha * un[i] for i in range(n))
+                un = tuple((un[i] + sp.alpha * (1 + d[i]) * v[i]) / (1 + sp.alpha * d[i]) for i in range(n))
+                for i in range(n):
+                    un[i][I[i]] = v[i][I[i]]
+
+                err = sum((un[i] - u[i]).norm().item() / (1e-6 + un[i].norm().item()) for i in range(n))
+                errs.append(err)
+                u = un
+                it = it + 1
+
+            if sp.verbose:
+                print("Backward: ", it, err)
+
+            dg = sp.linear_module.multiply_transpose(*u)
+            dg = tuple(g[i] + dg[i] for i in range(n))
+
+            sp.stats.bkwd_iters.update(it)
+            sp.stats.bkwd_time.update(time.time() - start)
+            sp.errs = errs
+            return (None,) + dg
+
+
 class MONForwardBackwardSplitting(nn.Module):
 
     def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=False):

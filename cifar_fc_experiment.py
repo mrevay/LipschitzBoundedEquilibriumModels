@@ -41,19 +41,21 @@ class simple_fc(torch.nn.Module):
 
 if __name__ == "__main__":
 
+    # trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
+    #                                               test_batch_size=4000)
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-                                                  test_batch_size=4000)
+                                                    test_batch_size=4000)
 
     load_models = False
 
-    path = './models/'
+    path = './models/cifar/'
     epochs = 40
     seed = 1
     tol = 1E-5  # Turn up tolerance when concerned about Lipschitz bound.
     width = 80
     lr_decay_steps = 10
 
-    image_size = 28 * 28
+    image_size = 32 * 32 * 3
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
