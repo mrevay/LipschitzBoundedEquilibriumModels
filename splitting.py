@@ -6,6 +6,7 @@ import time
 
 import matplotlib.pyplot as plt
 
+
 class FISTA(nn.Module):
 
     def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=False):
@@ -26,7 +27,7 @@ class FISTA(nn.Module):
 
         with torch.no_grad():
             yk = tuple(torch.zeros(s, dtype=x.dtype, device=x.device)
-                      for s in self.linear_module.z_shape(x.shape[0]))
+                       for s in self.linear_module.z_shape(x.shape[0]))
             xk = tuple(torch.zeros(s, dtype=x.dtype, device=x.device)
                        for s in self.linear_module.z_shape(x.shape[0]))
             tk = torch.ones((1), device=x.device)
@@ -40,7 +41,8 @@ class FISTA(nn.Module):
 
             def eval_prox(z, rho=rho):
                 Wz = self.linear_module.multiply(*z)
-                Z = tuple( (1-1/rho) * z[i] + Wz[i] / rho + bias[i] / rho for i in range(n))
+                Z = tuple((1-1/rho) * z[i] + Wz[i] /
+                          rho + bias[i] / rho for i in range(n))
                 return self.nonlin_module(*Z)
 
             err = 1.0
@@ -52,7 +54,8 @@ class FISTA(nn.Module):
                 xkp = eval_prox(yk)
                 tkp = 0.5 * (1 + torch.sqrt(1 + 4 * tk ** 2))
 
-                yk = tuple(xkp[i] + (tk - 1) / (tkp) * (xkp[i] - xk[i]) for i in range(n))
+                yk = tuple(xkp[i] + (tk - 1) / (tkp) * (xkp[i] - xk[i])
+                           for i in range(n))
                 xk = xkp
 
                 # if self.save_abs_err:
@@ -63,7 +66,8 @@ class FISTA(nn.Module):
                 # err = sum((zn[i] - z[i]).norm().item() / (1e-6 + zn[i].norm().item()) for i in range(n))
 
                 fn = self.nonlin_module(*self.linear_module(x, *yk))
-                err = sum((yk[i] - fn[i]).norm().item() / (1e-6 + yk[i].norm().item()) for i in range(n))
+                err = sum((yk[i] - fn[i]).norm().item() /
+                          (1e-6 + yk[i].norm().item()) for i in range(n))
                 errs.append(err)
                 z = yk
                 it = it + 1
@@ -106,12 +110,15 @@ class FISTA(nn.Module):
             errs = []
             while (err > sp.tol and it < sp.max_iter):
                 un = sp.linear_module.multiply_transpose(*u)
-                un = tuple((1 - sp.alpha) * u[i] + sp.alpha * un[i] for i in range(n))
-                un = tuple((un[i] + sp.alpha * (1 + d[i]) * v[i]) / (1 + sp.alpha * d[i]) for i in range(n))
+                un = tuple((1 - sp.alpha) * u[i] +
+                           sp.alpha * un[i] for i in range(n))
+                un = tuple((un[i] + sp.alpha * (1 + d[i]) * v[i]) /
+                           (1 + sp.alpha * d[i]) for i in range(n))
                 for i in range(n):
                     un[i][I[i]] = v[i][I[i]]
 
-                err = sum((un[i] - u[i]).norm().item() / (1e-6 + un[i].norm().item()) for i in range(n))
+                err = sum((un[i] - u[i]).norm().item() /
+                          (1e-6 + un[i].norm().item()) for i in range(n))
                 errs.append(err)
                 u = un
                 it = it + 1
@@ -157,14 +164,17 @@ class MONForwardBackwardSplitting(nn.Module):
             errs = []
             while (err > self.tol and it < self.max_iter):
                 zn = self.linear_module.multiply(*z)
-                zn = tuple((1 - self.alpha) * z[i] + self.alpha * (zn[i] + bias[i]) for i in range(n))
+                zn = tuple(
+                    (1 - self.alpha) * z[i] + self.alpha * (zn[i] + bias[i]) for i in range(n))
                 zn = self.nonlin_module(*zn)
                 if self.save_abs_err:
                     fn = self.nonlin_module(*self.linear_module(x, *zn))
-                    err = sum((zn[i] - fn[i]).norm().item() / (zn[i].norm().item()) for i in range(n))
+                    err = sum((zn[i] - fn[i]).norm().item() /
+                              (zn[i].norm().item()) for i in range(n))
                     errs.append(err)
                 else:
-                    err = sum((zn[i] - z[i]).norm().item() / (1e-6 + zn[i].norm().item()) for i in range(n))
+                    err = sum((zn[i] - z[i]).norm().item() /
+                              (1e-6 + zn[i].norm().item()) for i in range(n))
                 z = zn
                 it = it + 1
 
@@ -205,12 +215,15 @@ class MONForwardBackwardSplitting(nn.Module):
             errs = []
             while (err > sp.tol and it < sp.max_iter):
                 un = sp.linear_module.multiply_transpose(*u)
-                un = tuple((1 - sp.alpha) * u[i] + sp.alpha * un[i] for i in range(n))
-                un = tuple((un[i] + sp.alpha * (1 + d[i]) * v[i]) / (1 + sp.alpha * d[i]) for i in range(n))
+                un = tuple((1 - sp.alpha) * u[i] +
+                           sp.alpha * un[i] for i in range(n))
+                un = tuple((un[i] + sp.alpha * (1 + d[i]) * v[i]) /
+                           (1 + sp.alpha * d[i]) for i in range(n))
                 for i in range(n):
                     un[i][I[i]] = v[i][I[i]]
 
-                err = sum((un[i] - u[i]).norm().item() / (1e-6 + un[i].norm().item()) for i in range(n))
+                err = sum((un[i] - u[i]).norm().item() /
+                          (1e-6 + un[i].norm().item()) for i in range(n))
                 errs.append(err)
                 u = un
                 it = it + 1
@@ -260,16 +273,19 @@ class MONPeacemanRachford(nn.Module):
             errs = []
             while (err > self.tol and it < self.max_iter):
                 u_12 = tuple(2 * z[i] - u[i] for i in range(n))
-                z_12 = self.linear_module.inverse(*tuple(u_12[i] + self.alpha * bias[i] for i in range(n)))
+                z_12 = self.linear_module.inverse(
+                    *tuple(u_12[i] + self.alpha * bias[i] for i in range(n)))
                 u = tuple(2 * z_12[i] - u_12[i] for i in range(n))
                 zn = self.nonlin_module(*u)
 
                 if self.save_abs_err:
                     fn = self.nonlin_module(*self.linear_module(x, *zn))
-                    err = sum((zn[i] - fn[i]).norm().item() / (zn[i].norm().item()) for i in range(n))
+                    err = sum((zn[i] - fn[i]).norm().item() /
+                              (zn[i].norm().item()) for i in range(n))
                     errs.append(err)
                 else:
-                    err = sum((zn[i] - z[i]).norm().item() / (1e-6 + zn[i].norm().item()) for i in range(n))
+                    err = sum((zn[i] - z[i]).norm().item() /
+                              (1e-6 + zn[i].norm().item()) for i in range(n))
                 z = zn
                 it = it + 1
 
@@ -310,17 +326,19 @@ class MONPeacemanRachford(nn.Module):
                       for s in sp.linear_module.z_shape(g[0].shape[0]))
 
             err = 1.0
-            errs=[]
+            errs = []
             it = 0
-            while (err >sp.tol and it < sp.max_iter):
+            while (err > sp.tol and it < sp.max_iter):
                 u_12 = tuple(2 * z[i] - u[i] for i in range(n))
                 z_12 = sp.linear_module.inverse_transpose(*u_12)
                 u = tuple(2 * z_12[i] - u_12[i] for i in range(n))
-                zn = tuple((u[i] + sp.alpha * (1 + d[i]) * v[i]) / (1 + sp.alpha * d[i]) for i in range(n))
+                zn = tuple((u[i] + sp.alpha * (1 + d[i]) * v[i]) /
+                           (1 + sp.alpha * d[i]) for i in range(n))
                 for i in range(n):
                     zn[i][I[i]] = v[i][I[i]]
 
-                err = sum((zn[i] - z[i]).norm().item() / (1e-6 + zn[i].norm().item()) for i in range(n))
+                err = sum((zn[i] - z[i]).norm().item() /
+                          (1e-6 + zn[i].norm().item()) for i in range(n))
                 errs.append(err)
                 z = zn
                 it = it + 1

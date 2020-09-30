@@ -20,34 +20,37 @@ import NODEN
 # torch.set_printoptions(precision=4)
 
 
-
 def cuda(tensor):
     if torch.cuda.is_available():
         return tensor.cuda()
     else:
         return tensor
 
+
 def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
           print_freq=10, change_mo=True, model_path=None, lr_mode='step',
-          step=10,tune_alpha=False,max_alpha=1.):
-
+          step=10, tune_alpha=False, max_alpha=1.):
 
     optimizer = optim.Adam(model.parameters(), lr=max_lr)
 
     if lr_mode == '1cycle':
-        lr_schedule = lambda t: np.interp([t],
-                                          [0, (epochs-5)//2, epochs-5, epochs],
-                                          [1e-3, max_lr, 1e-3, 1e-3])[0]
+        def lr_schedule(t): return np.interp([t],
+                                             [0, (epochs-5)//2,
+                                              epochs-5, epochs],
+                                             [1e-3, max_lr, 1e-3, 1e-3])[0]
     elif lr_mode == 'step':
-        lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step, gamma=0.1, last_epoch=-1)
+        lr_scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step, gamma=0.1, last_epoch=-1)
     elif lr_mode != 'constant':
         raise Exception('lr mode one of constant, step, 1cycle')
 
     if change_mo:
         max_mo = 0.85
-        momentum_schedule = lambda t: np.interp([t],
-                                                [0, (epochs - 5) // 2, epochs - 5, epochs],
-                                                [0.95, max_mo, 0.95, 0.95])[0]
+
+        def momentum_schedule(t): return np.interp([t],
+                                                   [0, (epochs - 5) // 2,
+                                                    epochs - 5, epochs],
+                                                   [0.95, max_mo, 0.95, 0.95])[0]
 
     train_loss = []
     val_loss = []
@@ -63,16 +66,18 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
         model.train()
         start = time.time()
         for batch_idx, batch in enumerate(trainLoader):
-            if (batch_idx  == 30 or batch_idx == int(len(trainLoader)/2)) and tune_alpha:
+            if (batch_idx == 30 or batch_idx == int(len(trainLoader)/2)) and tune_alpha:
                 run_tune_alpha(model, cuda(batch[0]), max_alpha)
             if lr_mode == '1cycle':
-                lr = lr_schedule(epoch -  1 + batch_idx/ len(trainLoader))
+                lr = lr_schedule(epoch - 1 + batch_idx / len(trainLoader))
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = lr
             if change_mo:
-                beta1 = momentum_schedule(epoch - 1 + batch_idx / len(trainLoader))
+                beta1 = momentum_schedule(
+                    epoch - 1 + batch_idx / len(trainLoader))
                 for param_group in optimizer.param_groups:
-                    param_group['betas'] = (beta1, optimizer.param_groups[0]['betas'][1])
+                    param_group['betas'] = (
+                        beta1, optimizer.param_groups[0]['betas'][1])
 
             data, target = cuda(batch[0]), cuda(batch[1])
             optimizer.zero_grad()
@@ -108,7 +113,8 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
             torch.save(model.state_dict(), model_path)
 
         print("Tot train time: {}".format(time.time() - start))
-        train_loss.append(100. * incorrect_train.cpu().item() / float(len(trainLoader.dataset)))
+        train_loss.append(100. * incorrect_train.cpu().item() /
+                          float(len(trainLoader.dataset)))
 
         start = time.time()
         v_loss = 0
@@ -139,7 +145,7 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
 def run_tune_alpha(model, x, max_alpha):
     print("----tuning alpha----")
     print("current: ", model.mon.alpha)
-    orig_alpha  =  model.mon.alpha
+    orig_alpha = model.mon.alpha
     model.mon.stats.reset()
     model.mon.alpha = max_alpha
     with torch.no_grad():
@@ -157,9 +163,9 @@ def run_tune_alpha(model, x, max_alpha):
         print('alpha: {}\t iters: {}'.format(model.mon.alpha, iters_n))
         model.mon.stats.reset()
 
-    if iters==model.mon.max_iter:
+    if iters == model.mon.max_iter:
         print("none converged, resetting to current")
-        model.mon.alpha=orig_alpha
+        model.mon.alpha = orig_alpha
     else:
         model.mon.alpha = model.mon.alpha * 2
         print("setting to: ", model.mon.alpha)
@@ -198,13 +204,13 @@ def cifar_loaders(train_batch_size, test_batch_size=None, augment=True):
         test_batch_size = train_batch_size
 
     normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                         std=[0.2470, 0.2435, 0.2616])
+                                     std=[0.2470, 0.2435, 0.2616])
 
     if augment:
         transforms_list = [transforms.RandomHorizontalFlip(),
-                            transforms.RandomCrop(32, 4),
-                            transforms.ToTensor(),
-                            normalize]
+                           transforms.RandomCrop(32, 4),
+                           transforms.ToTensor(),
+                           normalize]
     else:
         transforms_list = [transforms.ToTensor(),
                            normalize]
@@ -227,21 +233,22 @@ def cifar_loaders(train_batch_size, test_batch_size=None, augment=True):
 
     return trainLoader, testLoader
 
+
 def svhn_loaders(train_batch_size, test_batch_size=None):
     if test_batch_size is None:
         test_batch_size = train_batch_size
 
     normalize = transforms.Normalize(mean=[0.4377, 0.4438, 0.4728],
-                                      std=[0.1980, 0.2010, 0.1970])
+                                     std=[0.1980, 0.2010, 0.1970])
     train_loader = torch.utils.data.DataLoader(
-            dset.SVHN(
-                root='data', split='train', download=True,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    normalize
-                ]),
-            ),
-            batch_size=train_batch_size, shuffle=True)
+        dset.SVHN(
+            root='data', split='train', download=True,
+            transform=transforms.Compose([
+                transforms.ToTensor(),
+                normalize
+            ]),
+        ),
+        batch_size=train_batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(
         dset.SVHN(
             root='data', split='test', download=True,
@@ -273,7 +280,8 @@ class SingleFcNet(nn.Module):
         super().__init__()
         linear_module = mon.MONSingleFc(in_dim, out_dim, m=m)
         nonlin_module = mon.MONReLU()
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         self.Wout = nn.Linear(out_dim, 10)
 
     def forward(self, x):
@@ -288,7 +296,8 @@ class NODENFcNet(nn.Module):
         super().__init__()
         linear_module = NODEN.NODEN_SingleFc(in_dim, out_dim, m=m)
         nonlin_module = NODEN.NODEN_ReLU()
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         self.Wout = nn.Linear(out_dim, 10)
 
     def forward(self, x):
@@ -301,9 +310,11 @@ class NODEN_Lip_Net(nn.Module):
 
     def __init__(self, splittingMethod, gamma, in_dim=784, width=100, out_dim=10, m=0.1, **kwargs):
         super().__init__()
-        linear_module = NODEN.NODEN_Lipschitz_Fc(in_dim, width, out_dim, gamma, m=m)
+        linear_module = NODEN.NODEN_Lipschitz_Fc(
+            in_dim, width, out_dim, gamma, m=m)
         nonlin_module = NODEN.NODEN_ReLU()
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
 
     def forward(self, x):
         x = x.view(x.shape[0], -1)
@@ -318,7 +329,8 @@ class MON_Lip_Net(nn.Module):
         super().__init__()
         linear_module = NODEN.Lipschitz_mon(in_dim, width, out_dim, gamma, m=m)
         nonlin_module = NODEN.NODEN_ReLU()
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
 
     def forward(self, x):
         x = x.view(x.shape[0], -1)
@@ -326,19 +338,22 @@ class MON_Lip_Net(nn.Module):
         y = self.mon.linear_module.G(z[-1])
         return y
 
+
 class NODENFcNet_uncon(nn.Module):
 
     def __init__(self, splittingMethod, in_dim=784, out_dim=100, m=0.1, **kwargs):
         super().__init__()
         linear_module = NODEN.NODEN_SingleFc_uncon(in_dim, out_dim, m=m)
         nonlin_module = NODEN.NODEN_ReLU()
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         self.Wout = nn.Linear(out_dim, 10)
 
     def forward(self, x):
         x = x.view(x.shape[0], -1)
         z = self.mon(x)
         return self.Wout(z[-1])
+
 
 class NodenConvNet(nn.Module):
 
@@ -347,10 +362,13 @@ class NodenConvNet(nn.Module):
         n = in_dim + 2
         shp = (n, n)
         self.pool = 4
-        self.out_dim = out_channels * (n // self.pool) ** 2
-        linear_module = NODEN.NODEN_Conv(in_dim, in_channels, out_channels, shp, m=m)
+        # self.out_dim = out_channels * (n // self.pool) ** 2
+        self.out_dim = out_channels * (n) ** 2
+        linear_module = NODEN.NODEN_Conv(
+            in_dim, in_channels, out_channels, shp, m=m)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         self.Wout = nn.Linear(self.out_dim, 10)
 
     def forward(self, x):
@@ -366,18 +384,22 @@ class Noden_LipschitzConvNet(nn.Module):
         super().__init__()
         n = in_dim + 2
         shp = (n, n)
-        self.pool = 4
+        self.pool = 1
         self.out_dim = out_channels * (n // self.pool) ** 2
-        linear_module = NODEN.NODEN_Lipschitz_Conv(in_dim, in_channels, out_channels, self.out_dim, gamma, shp, m=m, pool=4)
+        # self.out_dim = out_channels * (n) ** 2
+
+        linear_module = NODEN.NODEN_Lipschitz_Conv(
+            in_dim, in_channels, out_channels, self.out_dim, gamma, shp, m=m, pool=self.pool)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
-        self.Wout = nn.Linear(self.out_dim, 10)
+
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
 
     def forward(self, x):
         x = F.pad(x, (1, 1, 1, 1))
         z = self.mon(x)
         z = F.avg_pool2d(z[-1], self.pool)
-        return self.Wout(z.view(z.shape[0], -1))
+        return self.mon.linear_module.Wout(z.view(z.shape[0], -1))
 
 
 class SingleConvNet(nn.Module):
@@ -386,11 +408,12 @@ class SingleConvNet(nn.Module):
         super().__init__()
         n = in_dim + 2
         shp = (n, n)
-        self.pool = 4
+        self.pool = 1
         self.out_dim = out_channels * (n // self.pool) ** 2
         linear_module = mon.MONSingleConv(in_channels, out_channels, shp, m=m)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         self.Wout = nn.Linear(self.out_dim, 10)
 
     def forward(self, x):
@@ -410,7 +433,8 @@ class UnconConvNet(nn.Module):
         self.out_dim = out_channels * (n // self.pool) ** 2
         linear_module = NODEN.Uncon_Conv(in_channels, out_channels, shp, m=m)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         self.Wout = nn.Linear(self.out_dim, 10)
 
     def forward(self, x):
@@ -441,30 +465,31 @@ class UnconConvNet(nn.Module):
     #     return self.Wout(z.view(z.shape[0], -1))
 
 
-class  MultiConvNet(nn.Module):
+class MultiConvNet(nn.Module):
     def __init__(self, splittingMethod, in_dim=28, in_channels=1,
                  conv_sizes=(16, 32, 64), m=1.0, **kwargs):
         super().__init__()
-        linear_module = mon.MONMultiConv(in_channels, conv_sizes, in_dim+2, kernel_size=3, m=m)
+        linear_module = mon.MONMultiConv(
+            in_channels, conv_sizes, in_dim+2, kernel_size=3, m=m)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
-        self.mon = splittingMethod(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
         out_shape = linear_module.z_shape(1)[-1]
         dim = out_shape[1]*out_shape[2]*out_shape[3]
         self.Wout = nn.Linear(dim, 10)
 
     def forward(self, x):
-        x = F.pad(x, (1,1,1,1))
+        x = F.pad(x, (1, 1, 1, 1))
         zs = self.mon(x)
         z = zs[-1]
-        z = z.view(z.shape[0],-1)
+        z = z.view(z.shape[0], -1)
         return self.Wout(z)
-
 
 
 def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
-    channels = 1
-    dim = 28
+    channels = 3
+    dim = 32
     maxIter = 5000
     model = model.eval()
     Lip_batches = 2000  # Number of points to use when calculating the LC
@@ -493,7 +518,8 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
     # Estimate Lipschitz constant of model
     if check_Lipschitz:
         Lip = 0
-        u = torch.randn((Lip_batches, channels, dim, dim), requires_grad=True, device=device)
+        u = torch.randn((Lip_batches, channels, dim, dim),
+                        requires_grad=True, device=device)
         v = torch.randn_like(u, requires_grad=True, device=device)
 
         optimizer = torch.optim.Adam([u, v], lr=1E-2)
@@ -504,12 +530,14 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
             y2 = model(u + v)
 
             Lip_last = Lip
-            Lip = (y1 - y2).norm(dim=1) ** 2 / v.view([v.shape[0], -1]).norm(dim=1) ** 2
+            Lip = (y1 - y2).norm(dim=1) ** 2 / \
+                v.view([v.shape[0], -1]).norm(dim=1) ** 2
             Obj = -Lip.sum()
             Obj.backward()
             optimizer.step()
 
-            print('\rLipschitz constant: {:1.3f}'.format(Lip.max().sqrt().item()), sep=' ', end='', flush=True)
+            print('\rLipschitz constant: {:1.3f}'.format(
+                Lip.max().sqrt().item()), sep=' ', end='', flush=True)
 
             iter += 1
             if iter > 25:
@@ -543,6 +571,7 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
 
-    results = {"nominal": nominal_perf.to('cpu').item(), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
+    results = {"nominal": nominal_perf.to('cpu').item(
+    ), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
 
     return results

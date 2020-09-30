@@ -28,18 +28,21 @@ class MONSingleFc(nn.Module):
 
     def multiply(self, *z):
         ATAz = self.A(z[0]) @ self.A.weight
-        z_out = (1 - self.m) * z[0] - ATAz + self.B(z[0]) - z[0] @ self.B.weight
+        z_out = (1 - self.m) * z[0] - ATAz + \
+            self.B(z[0]) - z[0] @ self.B.weight
         return (z_out,)
 
     def multiply_transpose(self, *g):
         ATAg = self.A(g[0]) @ self.A.weight
-        g_out = (1 - self.m) * g[0] - ATAg - self.B(g[0]) + g[0] @ self.B.weight
+        g_out = (1 - self.m) * g[0] - ATAg - \
+            self.B(g[0]) + g[0] @ self.B.weight
         return (g_out,)
 
     def init_inverse(self, alpha, beta):
         I = torch.eye(self.A.weight.shape[0], dtype=self.A.weight.dtype,
                       device=self.A.weight.device)
-        W = (1 - self.m) * I - self.A.weight.T @ self.A.weight + self.B.weight - self.B.weight.T
+        W = (1 - self.m) * I - self.A.weight.T @ self.A.weight + \
+            self.B.weight - self.B.weight.T
         self.Winv = torch.inverse(alpha * I + beta * W)
 
     def inverse(self, *z):
@@ -51,7 +54,8 @@ class MONSingleFc(nn.Module):
     def W(self):
         I = torch.eye(self.A.weight.shape[0], dtype=self.A.weight.dtype,
                       device=self.A.weight.device)
-        W = (1 - self.m) * I - self.A.weight.T @ self.A.weight + self.B.weight - self.B.weight.T
+        W = (1 - self.m) * I - self.A.weight.T @ self.A.weight + \
+            self.B.weight - self.B.weight.T
         return W
 
 
@@ -63,13 +67,12 @@ class MONReLU(nn.Module):
         return tuple((z_ > 0).type_as(z[0]) for z_ in z)
 
 
-
-
 # Convolutional layers w/ FFT-based inverses
 
 def fft_to_complex_matrix(x):
     """ Create matrix with [a -b; b a] entries for complex numbers. """
-    x_stacked = torch.stack((x, torch.flip(x, (4,))), dim=5).permute(2, 3, 0, 4, 1, 5)
+    x_stacked = torch.stack((x, torch.flip(x, (4,))),
+                            dim=5).permute(2, 3, 0, 4, 1, 5)
     x_stacked[:, :, :, 0, :, 1] *= -1
     return x_stacked.reshape(-1, 2 * x.shape[0], 2 * x.shape[1])
 
@@ -102,8 +105,10 @@ def fft_conv(x, w_fft, transpose=False):
         transpose: flag of whether to transpose convolution
     """
     x_fft = fft_to_complex_vector(torch.rfft(x, 2, onesided=False))
-    wx_fft = x_fft.bmm(w_fft.transpose(1, 2)) if not transpose else x_fft.bmm(w_fft)
-    wx_fft = wx_fft.view(x.shape[2], x.shape[3], wx_fft.shape[1], -1, 2).permute(2, 3, 0, 1, 4)
+    wx_fft = x_fft.bmm(w_fft.transpose(
+        1, 2)) if not transpose else x_fft.bmm(w_fft)
+    wx_fft = wx_fft.view(x.shape[2], x.shape[3],
+                         wx_fft.shape[1], -1, 2).permute(2, 3, 0, 1, 4)
     return torch.irfft(wx_fft, 2, onesided=False)
 
 
@@ -167,10 +172,11 @@ class MONSingleConv(nn.Module):
         Bfft = init_fft_conv(B, self.shp)
         I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
                       device=Afft.device)[None, :, :]
-        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft + Bfft - Bfft.transpose(1, 2)
+        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1,
+                                                               2) @ Afft + Bfft - Bfft.transpose(1, 2)
         ImW = I - self.Wfft
 
-        return ImW.svd()[1].max()
+        return ImW.svd(compute_uv=False)[1].max()
 
     def init_inverse(self, alpha, beta):
         A = self.A.weight / self.A.weight.view(-1).norm()
@@ -179,7 +185,8 @@ class MONSingleConv(nn.Module):
         Bfft = init_fft_conv(B, self.shp)
         I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
                       device=Afft.device)[None, :, :]
-        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft + Bfft - Bfft.transpose(1, 2)
+        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1,
+                                                               2) @ Afft + Bfft - Bfft.transpose(1, 2)
         self.Winv = torch.inverse(alpha * I + beta * self.Wfft)
 
         # Store the value of alpha. This is bad code though...
@@ -264,16 +271,19 @@ class MONMultiConv(nn.Module):
 
         # create convolutional layers
         self.U = nn.Conv2d(in_channels, conv_channels[0], kernel_size)
-        self.A0 = nn.ModuleList([nn.Conv2d(c, c, kernel_size, bias=False) for c in conv_channels])
-        self.B0 = nn.ModuleList([nn.Conv2d(c, c, kernel_size, bias=False) for c in conv_channels])
+        self.A0 = nn.ModuleList(
+            [nn.Conv2d(c, c, kernel_size, bias=False) for c in conv_channels])
+        self.B0 = nn.ModuleList(
+            [nn.Conv2d(c, c, kernel_size, bias=False) for c in conv_channels])
         self.A_n0 = nn.ModuleList([nn.Conv2d(c1, c2, kernel_size, bias=False, stride=2)
                                    for c1, c2 in zip(conv_channels[:-1], conv_channels[1:])])
 
-        self.g = nn.ParameterList([nn.Parameter(torch.tensor(1.)) for _ in range(len(conv_channels))])
-        self.gn = nn.ParameterList([nn.Parameter(torch.tensor(1.)) for _ in range(len(conv_channels) - 1)])
-        self.h = nn.ParameterList([nn.Parameter(torch.tensor(1.)) for _ in range(len(conv_channels))])
-
-
+        self.g = nn.ParameterList(
+            [nn.Parameter(torch.tensor(1.)) for _ in range(len(conv_channels))])
+        self.gn = nn.ParameterList(
+            [nn.Parameter(torch.tensor(1.)) for _ in range(len(conv_channels) - 1)])
+        self.h = nn.ParameterList(
+            [nn.Parameter(torch.tensor(1.)) for _ in range(len(conv_channels))])
 
         self.S_idx = list()
         self.S_idxT = list()
@@ -281,20 +291,24 @@ class MONMultiConv(nn.Module):
             p = n // 2
             q = n
             idxT = list()
-            _idx = [[j + (i - 1) * p for i in range(1, q + 1)] for j in range(1, p + 1)]
+            _idx = [[j + (i - 1) * p for i in range(1, q + 1)]
+                    for j in range(1, p + 1)]
             for i in _idx:
                 for j in i:
                     idxT.append(j - 1)
-            _idx = [[j + (i - 1) * p + p * q for i in range(1, q + 1)] for j in range(1, p + 1)]
+            _idx = [[j + (i - 1) * p + p * q for i in range(1, q + 1)]
+                    for j in range(1, p + 1)]
             for i in _idx:
                 for j in i:
                     idxT.append(j - 1)
             idx = list()
-            _idx = [[j + (i - 1) * q for i in range(1, p + 1)] for j in range(1, q + 1)]
+            _idx = [[j + (i - 1) * q for i in range(1, p + 1)]
+                    for j in range(1, q + 1)]
             for i in _idx:
                 for j in i:
                     idx.append(j - 1)
-            _idx = [[j + (i - 1) * q + p * q for i in range(1, p + 1)] for j in range(1, q + 1)]
+            _idx = [[j + (i - 1) * q + p * q for i in range(1, p + 1)]
+                    for j in range(1, q + 1)]
             for i in _idx:
                 for j in i:
                     idx.append(j - 1)
@@ -346,7 +360,7 @@ class MONMultiConv(nn.Module):
         b_out = [self.U(self.cpad(x))]
         for i in range(n - 1):
             b_out.append(torch.zeros(z_shape[i + 1], dtype=self.A0[0].weight.dtype,
-                   device=self.A0[0].weight.device))
+                                     device=self.A0[0].weight.device))
         return tuple(b_out)
 
     def multiply(self, *z):
@@ -364,7 +378,8 @@ class MONMultiConv(nn.Module):
                 out -= A2_nTA2_nz1
             if A1_n is not None:
                 A1_nz0 = self.zpad(F.conv2d(self.cpad(z0), A1_n, stride=2))
-                A1TA1_nz0 = self.uncpad(F.conv_transpose2d(self.cpad(A1_nz0), A1))
+                A1TA1_nz0 = self.uncpad(
+                    F.conv_transpose2d(self.cpad(A1_nz0), A1))
                 out -= 2 * A1TA1_nz0
             return out
 
@@ -404,7 +419,8 @@ class MONMultiConv(nn.Module):
         n = len(self.A0)
         g_out = []
         for i in range(n - 1):
-            g_out.append(multiply_zi(g[i], self.A(i), self.B(i), z2=g[i + 1], A2_n=self.A_n(i), A2=self.A(i + 1)))
+            g_out.append(multiply_zi(g[i], self.A(i), self.B(
+                i), z2=g[i + 1], A2_n=self.A_n(i), A2=self.A(i + 1)))
         g_out.append(multiply_zi(g[n - 1], self.A(n - 1), self.B(n - 1)))
 
         return g_out
@@ -422,8 +438,8 @@ class MONMultiConv(nn.Module):
         I = [torch.eye(2 * self.A0[i].weight.shape[1], dtype=self.A0[i].weight.dtype,
                        device=self.A0[i].weight.device)[None, :, :] for i in range(n)]
 
-        D1 = [(alpha + beta - beta * self.m) * I[i] \
-              - beta * conv_fft_A[i].transpose(1, 2) @ conv_fft_A[i] \
+        D1 = [(alpha + beta - beta * self.m) * I[i]
+              - beta * conv_fft_A[i].transpose(1, 2) @ conv_fft_A[i]
               + beta * conv_fft_B[i] - beta * conv_fft_B[i].transpose(1, 2)
               for i in range(n - 1)]
 
@@ -431,7 +447,8 @@ class MONMultiConv(nn.Module):
 
         self.D2 = [np.sqrt(-beta) * conv_fft_A_n[i] for i in range(n - 1)]
 
-        G = [(self.D2[i] @ self.D1inv[i] @ self.D2[i].transpose(1, 2))[self.S_idx[i]] for i in range(n - 1)]
+        G = [(self.D2[i] @ self.D1inv[i] @ self.D2[i].transpose(1, 2))
+             [self.S_idx[i]] for i in range(n - 1)]
         S = [G[i][:self.conv_shp[i] ** 2 // 4]
              + G[i][self.conv_shp[i] ** 2 // 4:self.conv_shp[i] ** 2 // 2]
              + G[i][self.conv_shp[i] ** 2 // 2:3 * self.conv_shp[i] ** 2 // 4]
@@ -441,8 +458,8 @@ class MONMultiConv(nn.Module):
         self.H = [torch.inverse(hinv).float() for hinv in Hinv]
 
         Wn = (1 - self.m) * I[n - 1] \
-             - conv_fft_A[n - 1].transpose(1, 2) @ conv_fft_A[n - 1] \
-             + conv_fft_B[n - 1] - conv_fft_B[n - 1].transpose(1, 2)
+            - conv_fft_A[n - 1].transpose(1, 2) @ conv_fft_A[n - 1] \
+            + conv_fft_B[n - 1] - conv_fft_B[n - 1].transpose(1, 2)
 
         self.Wn_inv = torch.inverse(alpha * I[n - 1] + beta * Wn)
 
@@ -450,9 +467,12 @@ class MONMultiConv(nn.Module):
 
     def apply_inverse_conv(self, z, i):
         z0_fft = fft_to_complex_vector(torch.rfft(z, 2, onesided=False))
-        y0 = 0.5 * z0_fft.bmm((self.D2[i] @ self.D1inv[i]).transpose(1, 2))[self.S_idx[i]]
+        y0 = 0.5 * \
+            z0_fft.bmm((self.D2[i] @ self.D1inv[i]
+                        ).transpose(1, 2))[self.S_idx[i]]
         n = self.conv_shp[i]
-        y1 = y0[:n ** 2 // 4] + y0[n ** 2 // 4:n ** 2 // 2] + y0[n ** 2 // 2:3 * n ** 2 // 4] + y0[3 * n ** 2 // 4:]
+        y1 = y0[:n ** 2 // 4] + y0[n ** 2 // 4:n ** 2 // 2] + \
+            y0[n ** 2 // 2:3 * n ** 2 // 4] + y0[3 * n ** 2 // 4:]
         y2 = y1.bmm(self.H[i].transpose(1, 2))
         y3 = y2.repeat(4, 1, 1)
         y4 = y3[self.S_idxT[i]]
@@ -464,9 +484,12 @@ class MONMultiConv(nn.Module):
 
     def apply_inverse_conv_transpose(self, g, i):
         g0_fft = fft_to_complex_vector(torch.rfft(g, 2, onesided=False))
-        y0 = 0.5 * g0_fft.bmm(self.D1inv[i] @ self.D2[i].transpose(1, 2))[self.S_idx[i]]
+        y0 = 0.5 * \
+            g0_fft.bmm(self.D1inv[i] @
+                       self.D2[i].transpose(1, 2))[self.S_idx[i]]
         n = self.conv_shp[i]
-        y1 = y0[:n ** 2 // 4] + y0[n ** 2 // 4:n ** 2 // 2] + y0[n ** 2 // 2:3 * n ** 2 // 4] + y0[3 * n ** 2 // 4:]
+        y1 = y0[:n ** 2 // 4] + y0[n ** 2 // 4:n ** 2 // 2] + \
+            y0[n ** 2 // 2:3 * n ** 2 // 4] + y0[3 * n ** 2 // 4:]
         y2 = y1.bmm(self.H[i])
         y3 = y2.repeat(4, 1, 1)
         y4 = y3[self.S_idxT[i]]
@@ -480,8 +503,10 @@ class MONMultiConv(nn.Module):
         n = len(self.A0)
         x = [self.apply_inverse_conv(z[0], 0)]
         for i in range(n - 1):
-            A_nx0 = self.zpad(F.conv2d(self.cpad(x[-1]), self.A_n(i), stride=2))
-            ATA_nx0 = self.uncpad(F.conv_transpose2d(self.cpad(A_nx0), self.A(i + 1)))
+            A_nx0 = self.zpad(
+                F.conv2d(self.cpad(x[-1]), self.A_n(i), stride=2))
+            ATA_nx0 = self.uncpad(F.conv_transpose2d(
+                self.cpad(A_nx0), self.A(i + 1)))
             xn = -self.beta * 2 * ATA_nx0
             if i < n - 2:
                 x.append(self.apply_inverse_conv(z[i + 1] - xn, i + 1))

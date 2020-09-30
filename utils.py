@@ -1,6 +1,7 @@
 import torch
 import numpy as np
-from train import cuda
+# from train import cuda
+
 
 class Meter(object):
     """Computes and stores the min, max, avg, and current values"""
@@ -40,8 +41,9 @@ class SplittingMethodStats(object):
 
     def report(self):
         print('Fwd iters: {:.2f}\tFwd Time: {:.4f}\tBkwd Iters: {:.2f}\tBkwd Time: {:.4f}\n'.format(
-                self.fwd_iters.avg, self.fwd_time.avg,
-                self.bkwd_iters.avg, self.bkwd_time.avg))
+            self.fwd_iters.avg, self.fwd_time.avg,
+            self.bkwd_iters.avg, self.bkwd_time.avg))
+
 
 def compute_eigval(lin_module, method="power", compute_smallest=False, largest=None):
     with torch.no_grad():
@@ -51,11 +53,13 @@ def compute_eigval(lin_module, method="power", compute_smallest=False, largest=N
             return eigvals.detach().cpu().numpy()[-1] / 2
 
         elif method == "power":
-            z0 = tuple(torch.randn(*shp).to(lin_module.U.weight.device) for shp in lin_module.z_shape(1))
+            z0 = tuple(torch.randn(*shp).to(lin_module.U.weight.device)
+                       for shp in lin_module.z_shape(1))
             lam = power_iteration(lin_module, z0, 100,
                                   compute_smallest=compute_smallest,
                                   largest=largest)
             return lam
+
 
 def power_iteration(linear_module, z, T,  compute_smallest=False, largest=None):
     n = len(z)
@@ -63,14 +67,16 @@ def power_iteration(linear_module, z, T,  compute_smallest=False, largest=None):
         za = linear_module.multiply(*z)
         zb = linear_module.multiply_transpose(*z)
         if compute_smallest:
-            zn = tuple(-2*largest*a + 0.5*b + 0.5*c for a,b,c in zip(z, za, zb))
+            zn = tuple(-2*largest*a + 0.5*b + 0.5 *
+                       c for a, b, c in zip(z, za, zb))
         else:
-            zn = tuple(0.5*a + 0.5*b for a,b in zip(za, zb))
+            zn = tuple(0.5*a + 0.5*b for a, b in zip(za, zb))
         x = sum((zn[i]*z[i]).sum().item() for i in range(n))
         y = sum((z[i]*z[i]).sum().item() for i in range(n))
         lam = x/y
         z = tuple(zn[i]/np.sqrt(y) for i in range(n))
-    return lam +2*largest if compute_smallest else lam
+    return lam + 2*largest if compute_smallest else lam
+
 
 def get_splitting_stats(dataLoader, model):
     model = cuda(model)
@@ -81,11 +87,14 @@ def get_splitting_stats(dataLoader, model):
         model(data)
         return model.mon.errs
 
+
 def uncpad(x, pad=1):
     return x[..., pad:-pad, pad:-pad]
 
+
 def cpad(x, pad=1):
     return torch.nn.functional.pad(x, (pad, pad, pad, pad), mode="circular")
+
 
 def avg_pool_adjoint(x, pool=4, pad=1):
     """ Calculates the adjoint operator of the average pooling operation.
@@ -101,7 +110,7 @@ def avg_pool_adjoint(x, pool=4, pad=1):
 def kron(a, b):
     """
     A part of the pylabyk library: numpytorch.py at https://github.com/yulkang/pylabyk
-    
+
     Kronecker product of matrices a and b with leading batch dimensions.
     Batch dimensions are broadcast. The number of them mush
     :type a: torch.Tensor
