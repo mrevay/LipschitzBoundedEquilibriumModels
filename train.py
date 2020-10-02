@@ -99,6 +99,7 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
                     ce_loss.item(), err))
                 model.mon.stats.report()
                 model.mon.stats.reset()
+
             optimizer.step()
 
             if hasattr(model.mon.linear_module, 'Lambda'):
@@ -112,6 +113,7 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
         if model_path is not None:
             torch.save(model.state_dict(), model_path)
 
+        # estimate_Lip(model, 50, data.shape[1], data.shape[2])
         print("Tot train time: {}".format(time.time() - start))
         train_loss.append(100. * incorrect_train.cpu().item() /
                           float(len(trainLoader.dataset)))
@@ -380,17 +382,18 @@ class NodenConvNet(nn.Module):
 
 class Noden_LipschitzConvNet(nn.Module):
 
-    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, gamma=1.0, **kwargs):
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, gamma=1.0, pool=1, **kwargs):
         super().__init__()
         n = in_dim + 2
         shp = (n, n)
-        self.pool = 1
+        self.pool = pool
         self.out_dim = out_channels * (n // self.pool) ** 2
         # self.out_dim = out_channels * (n) ** 2
 
         linear_module = NODEN.NODEN_Lipschitz_Conv(
             in_dim, in_channels, out_channels, self.out_dim, gamma, shp, m=m, pool=self.pool)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
+        # nonlin_module = mon.MONBorderLin(linear_module.pad[0])
 
         self.mon = splittingMethod(
             linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
@@ -486,13 +489,13 @@ class MultiConvNet(nn.Module):
         return self.Wout(z)
 
 
-def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
+def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True, Lip_batches=50):
 
     channels = 3
     dim = 32
-    maxIter = 5000
+    maxIter = 1000
     model = model.eval()
-    Lip_batches = 2000  # Number of points to use when calculating the LC
+    # Lip_batches = 50  # Number of points to use when calculating the LC
 
     # Test nominal performance.
     test_loss = 0
@@ -575,3 +578,41 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True):
     ), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
 
     return results
+
+
+def estimate_Lip(model, Lip_batches, channels, dim):   # Estimate Lipschitz constant of model
+
+    device = "cuda" if torch.cuda.is_available else "cpu"
+    maxIter = 500
+    Lip = 0
+    u = torch.randn((Lip_batches, channels, dim, dim),
+                    requires_grad=True, device=device)
+    v = torch.randn_like(u, requires_grad=True, device=device)
+
+    optimizer = torch.optim.Adam([u, v], lr=1E-1)
+    iter = 0
+    while iter < maxIter:
+        optimizer.zero_grad()
+        y1 = model(u)
+        y2 = model(u + v)
+
+        Lip_last = Lip
+        Lip = (y1 - y2).norm(dim=1) ** 2 / \
+            v.view([v.shape[0], -1]).norm(dim=1) ** 2
+        Obj = -Lip.sum()
+        Obj.backward()
+        optimizer.step()
+
+        print('\rLipschitz constant: {:1.3f}'.format(
+            Lip.max().sqrt().item()), sep=' ', end='', flush=True)
+
+        iter += 1
+        if iter > 25:
+            if Lip.max() < Lip_last.max() + 1E-3:  # Smaller than 1E-4 round-off error?
+                optimizer.param_groups[0]["lr"] /= 10.0
+                iter = 0
+
+                if optimizer.param_groups[0]["lr"] <= 1E-5:
+                    break
+    print()
+    print()

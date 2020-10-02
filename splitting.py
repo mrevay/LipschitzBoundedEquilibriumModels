@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 class FISTA(nn.Module):
 
-    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=False):
+    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=True):
         super().__init__()
         self.linear_module = linear_module
         self.nonlin_module = nonlin_module
@@ -242,7 +242,7 @@ class MONForwardBackwardSplitting(nn.Module):
 
 class MONPeacemanRachford(nn.Module):
 
-    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=False):
+    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=True):
         super().__init__()
         self.linear_module = linear_module
         self.nonlin_module = nonlin_module

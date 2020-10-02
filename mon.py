@@ -261,6 +261,24 @@ class MONBorderReLU(nn.Module):
         return tuple((z_ > 0).type_as(z[0]) for z_ in z)
 
 
+class MONBorderLin(nn.Module):
+    def __init__(self, border=1):
+        super().__init__()
+        self.border = border
+
+    def forward(self, *z):
+        zn = tuple(z_ for z_ in z)
+        for i in range(len(zn)):
+            zn[i][:, :, :self.border, :] = 0
+            zn[i][:, :, -self.border:, :] = 0
+            zn[i][:, :, :, :self.border] = 0
+            zn[i][:, :, :, -self.border:] = 0
+        return zn
+
+    def derivative(self, *z):
+        return tuple(torch.ones_like(z_) for z_ in z)
+
+
 class MONMultiConv(nn.Module):
     def __init__(self, in_channels, conv_channels, image_size, kernel_size=3, m=1.0):
         super().__init__()
