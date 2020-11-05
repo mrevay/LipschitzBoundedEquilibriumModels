@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+import cvxpy as cp
+from cvxpylayers.torch import CvxpyLayer
+
 
 class MONSingleFc(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
@@ -172,8 +175,10 @@ class MONSingleConv(nn.Module):
         Bfft = init_fft_conv(B, self.shp)
         I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
                       device=Afft.device)[None, :, :]
-        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1,
-                                                               2) @ Afft + Bfft - Bfft.transpose(1, 2)
+
+        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft \
+            + Bfft - Bfft.transpose(1, 2)
+
         ImW = I - self.Wfft
 
         return ImW.svd(compute_uv=False)[1].max()
@@ -198,49 +203,146 @@ class MONSingleConv(nn.Module):
     def inverse_transpose(self, *g):
         return (fft_conv(g[0], self.Winv, transpose=True),)
 
-    # def inverse(self, *z):
-    #     alpha = self.alpha
-    #     with torch.no_grad():
-    #         A = self.A.weight / self.A.weight.view(-1).norm()
-    #         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
 
-    #         ztotal = z[0]
-    #         zn = z[0]
-    #         for n in range(200):
-    #             Az = F.conv2d(self.cpad(zn), A)
-    #             ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
-    #             Bz = F.conv2d(self.cpad(zn), B)
-    #             BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
-    #             zn = -alpha * (self.m * zn + self.g*ATAz - Bz + BTz)
+class MONLipConv(nn.Module):
+    """ MON class with a single 3x3 (circular) convolution """
 
-    #             ztotal += zn
-    #             if zn.norm() <= 0.001:
-    #                 # print(n, 'iterations')
-    #                 break
+    def __init__(self, in_channels, out_channels, out_dim, shp, kernel_size=3, m=1.0, gamma=1.0, pool=4):
+        super().__init__()
 
-    #     return ztotal
+        self.in_channels = in_channels
+        self.out_channels = out_channels
 
-    # def inverse_transpose(self, *g):
-    #     alpha = self.alpha
-    #     with torch.no_grad():
-    #         A = self.A.weight / self.A.weight.view(-1).norm()
-    #         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+        self.U = nn.Conv2d(in_channels, out_channels, kernel_size)
+        self.A = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
+        self.g = nn.Parameter(torch.tensor(1.))
+        self.h = nn.Parameter(torch.tensor(1.))
+        self.B = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
+        self.pad = 4 * ((kernel_size - 1) // 2,)
+        self.shp = shp
+        self.m = m
 
-    #         ztotal = g[0]
-    #         zn = g[0]
-    #         for n in range(200):
-    #             Az = F.conv2d(self.cpad(zn), A)
-    #             ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
-    #             Bz = F.conv2d(self.cpad(zn), B)
-    #             BTz = self.uncpad(F.conv_transpose2d(self.cpad(zn), B))
-    #             zn = -alpha * (self.m * zn + self.g*ATAz + Bz - BTz)
+        self.gamma = gamma
+        self.pool = pool
 
-    #             ztotal += zn
-    #             if zn.norm() <= 0.001:
-    #                 # print(n, 'iterations')
-    #                 break
+        n = shp[0]
+        self.out_dim = out_channels * (n // pool) ** 2
+        self.Wout = nn.Linear(self.out_dim, 10)
 
-    #     return ztotal
+    def cpad(self, x):
+        return F.pad(x, self.pad, mode="circular")
+
+    def uncpad(self, x):
+        return x[:, :, 2 * self.pad[0]:-2 * self.pad[1], 2 * self.pad[2]:-2 * self.pad[3]]
+
+    def x_shape(self, n_batch):
+        return (n_batch, self.U.in_channels, self.shp[0], self.shp[1])
+
+    def z_shape(self, n_batch):
+        return ((n_batch, self.A.in_channels, self.shp[0], self.shp[1]),)
+
+    def forward(self, x, *z):
+        # circular padding is broken in PyTorch
+        return (F.conv2d(self.cpad(x), self.U.weight, self.U.bias) + self.multiply(*z)[0],)
+
+    def bias(self, x):
+        return (F.conv2d(self.cpad(x), self.U.weight, self.U.bias),)
+
+    def multiply(self, *z):
+        A = self.A.weight
+        # B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+        B = self.B.weight
+        U = self.U.weight
+
+        Az = F.conv2d(self.cpad(z[0]), A)
+        ATAz = self.uncpad(F.conv_transpose2d(self.cpad(Az), A))
+        Bz = F.conv2d(self.cpad(z[0]), B)
+        BTz = self.uncpad(F.conv_transpose2d(self.cpad(z[0]), B))
+
+        UTz = F.conv_transpose2d(self.cpad(z[0]), U)
+        UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U))
+
+        G = self.Wout.weight
+        zp = F.avg_pool2d(z[-1], self.pool).view(z[0].shape[0], -1)
+
+        GTGz = (zp @ G.T) @ G
+
+        z_out = (1 - self.m) * z[0] - ATAz + Bz - BTz - \
+            0.5 * UUTz / self.gamma - 0.5 * GTGz.view_as(z[0]) / self.gamma
+
+        def inner(x, y):
+            return (x*y).sum()
+
+        return (z_out,)
+
+    def multiply_transpose(self, *g):
+        # A = self.A.weight / self.A.weight.view(-1).norm()
+        A = self.A.weight
+        B = self.B.weight
+        U = self.U.weight
+
+        Ag = F.conv2d(self.cpad(g[0]), A)
+        ATAg = self.uncpad(F.conv_transpose2d(self.cpad(Ag), A))
+        Bg = F.conv2d(self.cpad(g[0]), B)
+        BTg = self.uncpad(F.conv_transpose2d(self.cpad(g[0]), B))
+
+        UTz = F.conv_transpose2d(self.cpad(g[0]), U)
+        UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U))
+
+        G = self.Wout.weight
+
+        gp = F.avg_pool2d(g[-1], self.pool).view(g[0].shape[0], -1)
+        # Gz = (zp @ G.T)
+        GTGz = (gp @ G.T) @ G
+
+        g_out = (1 - self.m) * g[0] - ATAg - Bg + BTg - \
+            0.5 * UUTz / self.gamma - 0.5 * GTGz.view_as(g[0]) / self.gamma
+
+        return (g_out,)
+
+    def max_sv(self):
+        A = self.A.weight / self.A.weight.view(-1).norm()
+        B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+        U = self.U.weight
+
+        G = self.Wout.weight
+
+        Afft = init_fft_conv(A, self.shp)
+        Bfft = init_fft_conv(B, self.shp)
+        Ufft = init_fft_conv(U, self.shp)
+
+        I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
+                      device=Afft.device)[None, :, :]
+
+        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1, 2) @ Afft \
+            + Bfft - Bfft.transpose(1, 2) - 0.5 * \
+            Ufft @ Ufft.transpose(1, 2) / self.gamma
+
+        ImW = I - self.Wfft
+
+        Gsv = 0.5 * (G @ G.T).svd(compute_uv=False)[1].max() / self.gamma
+
+        return (ImW.svd(compute_uv=False)[1].max() + Gsv).item()
+
+    def init_inverse(self, alpha, beta):
+        A = self.A.weight / self.A.weight.view(-1).norm()
+        B = self.h * self.B.weight / self.B.weight.view(-1).norm()
+        Afft = init_fft_conv(A, self.shp)
+        Bfft = init_fft_conv(B, self.shp)
+        I = torch.eye(Afft.shape[1], dtype=Afft.dtype,
+                      device=Afft.device)[None, :, :]
+        self.Wfft = (1 - self.m) * I - self.g * Afft.transpose(1,
+                                                               2) @ Afft + Bfft - Bfft.transpose(1, 2)
+        self.Winv = torch.inverse(alpha * I + beta * self.Wfft)
+
+        # Store the value of alpha. This is bad code though...
+        self.alpha = -beta
+
+    def inverse(self, *z):
+        return (fft_conv(z[0], self.Winv),)
+
+    def inverse_transpose(self, *g):
+        return (fft_conv(g[0], self.Winv, transpose=True),)
 
 
 class MONBorderReLU(nn.Module):

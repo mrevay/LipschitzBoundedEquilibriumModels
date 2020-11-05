@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.autograd import Function
 import utils
 import time
+import copy
 
 import mdeq_module.broyden as broyden
 import mdeq_module.deq2d as deq
@@ -13,7 +14,7 @@ import numpy as np
 
 class Broyden(nn.Module):
 
-    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=False):
+    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=True):
         super().__init__()
         self.linear_module = linear_module
         self.nonlin_module = nonlin_module
@@ -42,35 +43,44 @@ class Broyden(nn.Module):
             errs = []
 
             # Calulate the roots of the model
+            threshold = 50
             nelem = sum([elem.nelement() for elem in z])
-            eps = 1e-5 * np.sqrt(nelem)
-            threshold = 20
+            eps = 1e-7 * np.sqrt(nelem)
 
-            batch_size = z[0].shape[0]
+            def eval_net(z, u, *args):
+                zlin = self.linear_module(u, *z)[0]
+                return self.nonlin_module(zlin)
 
-            bias = self.linear_module.bias(x)[0]
+            z_est = deq.DEQFunc2d.broyden_find_root(
+                eval_net, z, x, eps, threshold, -1, None)
 
-            cutoffs = [(elem.size(1), elem.size(2), elem.size(3))
-                       for elem in z]
-            # Initial guess
-            z1_est = deq.DEQFunc2d.list2vec(z)
+            # bias = self.linear_module.bias(x)[0]
 
-            def g(z):
-                zp = deq.DEQFunc2d.vec2list(z, cutoffs)
-                zlin = self.linear_module(x, *zp)[0]
-                dz = (self.nonlin_module(zlin)[0] - zp[0], )
-                return deq.DEQFunc2d.list2vec(dz)
+            # cutoffs = [(elem.size(1), elem.size(2), elem.size(3))
+            #            for elem in z]
+            # # Initial guess
+            # z1_est = deq.DEQFunc2d.list2vec(z)
 
-            res = broyden.broyden(g, z1_est, threshold,
-                                  eps, name="forward", ls=True)
-            z = deq.DEQFunc2d.vec2list(res['result'], cutoffs)
+            # def g(z):
+            #     zp = deq.DEQFunc2d.vec2list(z, cutoffs)
+            #     zlin = self.linear_module(x, *zp)[0]
+            #     dz = (self.nonlin_module(zlin)[0] - zp[0], )
+            #     return deq.DEQFunc2d.list2vec(dz)
 
-        if self.verbose:
-            print("Forward: ", res['nstep'], err)
+            # res = broyden.broyden(g, z1_est, threshold,
+            #                       eps, name="forward", ls=True)
+            # z = deq.DEQFunc2d.vec2list(res['result'], cutoffs)
 
         # Run the forward pass one more time, tracking gradients, then backward placeholder
-        zn = self.linear_module(x, *z)
+        zn = self.linear_module(x, *z_est)
         zn = self.nonlin_module(*zn)
+
+        if self.verbose:
+            # err = z_est[0] - eval_net(z_est, x)[0]
+            err = zn[0] - z_est[0]
+            rel_err = err.norm().item() / (1E-6 + z_est[0].norm().item())
+            # print("Forward: ", res['nstep'], rel_err)
+            print("Forward: ", rel_err)
 
         # Run backwards pass. Currently uses forward backward splitting.
         zn = self.Backward.apply(self, *zn)
@@ -80,13 +90,13 @@ class Broyden(nn.Module):
         return zn
 
     class Backward(Function):
-        @staticmethod
+        @ staticmethod
         def forward(ctx, splitter, *z):
             ctx.splitter = splitter
             ctx.save_for_backward(*z)
             return z
 
-        @staticmethod
+        @ staticmethod
         def backward(ctx, *g):
             start = time.time()
             sp = ctx.splitter
@@ -131,7 +141,7 @@ class Broyden(nn.Module):
 
 class FISTA(nn.Module):
 
-    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=50, verbose=True):
+    def __init__(self, linear_module, nonlin_module, alpha=1.0, tol=1e-5, max_iter=5000, verbose=False):
         super().__init__()
         self.linear_module = linear_module
         self.nonlin_module = nonlin_module
@@ -142,14 +152,21 @@ class FISTA(nn.Module):
         self.stats = utils.SplittingMethodStats()
         self.save_abs_err = False
 
+        self.rho = None
+        self.last_iters = None
+
     def forward(self, x, z0=None):
         """ Forward pass of the MON, find equilibrium using FISTA"""
 
         start = time.time()
 
+        # During training we need to keep track of operator norm.
+        # During eval it has been fixed.
+        if self.training:
+            # Estimate Lipschitz constant of (I-W) using power method.
+            self.rho = self.estimate_operator_norm(epsilon=1E-4)
+
         with torch.no_grad():
-            # yk = tuple(torch.zeros(s, dtype=x.dtype, device=x.device)
-            #            for s in self.linear_module.z_shape(x.shape[0]))
 
             yk = tuple(z0i for z0i in z0) if z0 is not None else \
                 tuple(torch.zeros(s, dtype=x.dtype, device=x.device)
@@ -162,11 +179,7 @@ class FISTA(nn.Module):
             n = len(yk)
             bias = self.linear_module.bias(x)
 
-            Id = torch.eye(yk[0].shape[1], device=x.device)
-
-            rho = self.linear_module.max_sv()
-
-            def eval_prox(z, rho=rho):
+            def eval_prox(z, rho=self.rho):
                 Wz = self.linear_module.multiply(*z)
                 Z = tuple((1-1/rho) * z[i] + Wz[i] /
                           rho + bias[i] / rho for i in range(n))
@@ -175,6 +188,7 @@ class FISTA(nn.Module):
             err = 1.0
             it = 0
             errs = []
+            t0 = time.time()
             while (err > self.tol and it < self.max_iter):
 
                 # FISTA Algorithm
@@ -192,8 +206,11 @@ class FISTA(nn.Module):
                 z = yk
                 it = it + 1
 
+        # Adapt rho based on number of iterations.
+
         if self.verbose:
-            print("Forward: ", it, err)
+            dt = time.time() - t0
+            print(f"Forward: \titer={it:d}, err={err:1.4f}, time={dt:1.3f}s")
 
         # Run the forward pass one more time, tracking gradients, then backward placeholder
         zn = self.linear_module(x, *z)
@@ -205,14 +222,47 @@ class FISTA(nn.Module):
         self.errs = errs
         return zn
 
+    def estimate_operator_norm(self, epsilon, max_iters=1000):
+        # Estimates the operator norm of I-W where W is the forward part of the linear module.
+        # This method essentially just uses a power method.
+
+        device = self.linear_module.U.weight.device
+
+        module_copy = copy.deepcopy(self.linear_module)  # get a new instance
+
+        # Sampling initial vector
+        u = torch.randn(self.linear_module.z_shape(
+            1)[0], requires_grad=True, device=device)
+
+        op_norm = 0
+
+        for ii in range(max_iters):
+            u.data = u.data / u.data.norm()
+            v = (u[0] - module_copy.multiply(u)[0]).view(-1, 1)
+            vsq = 0.5 * (v.T @ v)
+
+            vsq.backward(retain_graph=True)
+            u.data = u.grad.clone()
+
+            u.grad.data.zero_()
+
+            op_norm_last = op_norm
+            op_norm = u.view(-1).norm().sqrt()
+
+            if abs(op_norm - op_norm_last) / op_norm < epsilon:
+                return op_norm
+
+        print('Operator norm estimation did not converge.')
+        return op_norm.item()
+
     class Backward(Function):
-        @staticmethod
+        @ staticmethod
         def forward(ctx, splitter, *z):
             ctx.splitter = splitter
             ctx.save_for_backward(*z)
             return z
 
-        @staticmethod
+        @ staticmethod
         def backward(ctx, *g):
             start = time.time()
             sp = ctx.splitter
@@ -228,6 +278,8 @@ class FISTA(nn.Module):
             err = 1.0
             it = 0
             errs = []
+
+            t0 = time.time()
             while (err > sp.tol and it < sp.max_iter):
                 un = sp.linear_module.multiply_transpose(*u)
                 un = tuple((1 - sp.alpha) * u[i] +
@@ -244,7 +296,11 @@ class FISTA(nn.Module):
                 it = it + 1
 
             if sp.verbose:
-                print("Backward: ", it, err)
+                # print("Backward: ", it, err)
+
+                dt = time.time() - t0
+                print(
+                    f"Backward: \titer={it:d}, err={err:1.4f}, time={dt:1.3f}s")
 
             dg = sp.linear_module.multiply_transpose(*u)
             dg = tuple(g[i] + dg[i] for i in range(n))
@@ -311,13 +367,13 @@ class MONForwardBackwardSplitting(nn.Module):
         return zn
 
     class Backward(Function):
-        @staticmethod
+        @ staticmethod
         def forward(ctx, splitter, *z):
             ctx.splitter = splitter
             ctx.save_for_backward(*z)
             return z
 
-        @staticmethod
+        @ staticmethod
         def backward(ctx, *g):
             start = time.time()
             sp = ctx.splitter
@@ -423,13 +479,13 @@ class MONPeacemanRachford(nn.Module):
         return zn
 
     class Backward(Function):
-        @staticmethod
+        @ staticmethod
         def forward(ctx, splitter, *z):
             ctx.splitter = splitter
             ctx.save_for_backward(*z)
             return z
 
-        @staticmethod
+        @ staticmethod
         def backward(ctx, *g):
             start = time.time()
             sp = ctx.splitter
@@ -473,3 +529,29 @@ class MONPeacemanRachford(nn.Module):
             sp.stats.bkwd_time.update(time.time() - start)
             sp.errs = errs
             return (None,) + dg
+
+
+if __name__ == "__main__":
+
+    # Test Operator norm estimation
+    n = 50
+    W = torch.randn(n, n)
+
+    # Calculate spectral norm directly.
+    sn = W.svd()[1].max()
+    print("sn calculated via SVD is: ", sn)
+
+    # Sampling method
+    u = torch.nn.Parameter(torch.randn(n, 1))
+
+    for ii in range(100):
+        u.data = u.data / u.data.norm()
+        v = W @ u
+        vsq = 0.5 * (v.T @ v)
+
+        vsq.backward(retain_graph=True)
+        u.data = u.grad.clone()
+
+        u.grad.data.zero_()
+
+        print("iterative sn is: ", u.norm().sqrt())
