@@ -14,34 +14,36 @@ matplotlib.use("TkAgg")
 
 if __name__ == "__main__":
 
-    dataset = "mnist"
+    dataset = "cifar"
     if dataset == "mnist":
         trainLoader, testLoader = train.mnist_loaders(train_batch_size=200,
                                                       test_batch_size=200)
         in_dim = 28
         in_channels = 1
+        pool = 3
     elif dataset == "cifar":
         trainLoader, testLoader = train.cifar_loaders(train_batch_size=200,
                                                       test_batch_size=200)
         in_dim = 32
         in_channels = 3
+        pool = 2
 
     elif dataset == "svhn":
-        trainLoader, testLoader = train.svhn_loaders(train_batch_size=32,
-                                                     test_batch_size=32)
+        trainLoader, testLoader = train.svhn_loaders(train_batch_size=100,
+                                                     test_batch_size=100)
         in_dim = 32
         in_channels = 3
+        pool = 2
 
     load_models = False
     alpha = 0.005
-    gamma = 5.0
-    epochs = 2
+    epochs = 10
     seed = 4
     tol = 1E-2
-    width = 20
+    width = 200
     lr_decay_steps = 5
     max_iter = 2000
-    m = 10
+    m = 5.0
 
     path = './models/conv_experiment/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -50,19 +52,29 @@ if __name__ == "__main__":
     numpy.random.seed(seed)
 
     # Lipschitz network
-    for gamma in [0.5]:
+    for gamma in [50]:
         torch.manual_seed(seed)
         numpy.random.seed(seed)
 
-        LipConvNet = train.LipConvNet(sp.FISTA,
-                                      in_dim=in_dim,
-                                      in_channels=in_channels,
-                                      out_channels=width,
-                                      alpha=alpha,
-                                      max_iter=max_iter,
-                                      tol=tol,
-                                      m=m,
-                                      gamma=gamma)
+        LipConvNet = train.SingleConvNet(sp.FISTA,
+                                         in_dim=in_dim,
+                                         in_channels=in_channels,
+                                         out_channels=width,
+                                         alpha=alpha,
+                                         max_iter=max_iter,
+                                         tol=tol,
+                                         m=m)
+
+        # LipConvNet = train.LBENLipConvNet(sp.FISTA,
+        #                                   in_dim=in_dim,
+        #                                   in_channels=in_channels,
+        #                                   out_channels=width,
+        #                                   alpha=alpha,
+        #                                   max_iter=max_iter,
+        #                                   tol=tol,
+        #                                   m=m,
+        #                                   gamma=gamma,
+        #                                   pool=pool)
 
         Lip_train, Lip_val = train.train(trainLoader, testLoader,
                                          LipConvNet,
@@ -75,10 +87,10 @@ if __name__ == "__main__":
                                          tune_alpha=False,
                                          warmstart=False)
 
-        name = 'mon_conv_w{:d}_L{:1.1f}'.format(width, gamma)
+        name = 'conv_w{:d}_L{:1.1f}'.format(width, gamma)
         torch.save(LipConvNet.state_dict(), path + name + '.params')
 
-        LipConvNet.mon.tol = 1E-4
+        LipConvNet.mon.tol = 1E-3
         res = train.test_robustness(LipConvNet, testLoader)
         io.savemat(path + name + ".mat", res)
 

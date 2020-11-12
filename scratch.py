@@ -17,10 +17,10 @@ matplotlib.use("TkAgg")
 
 if __name__ == "__main__":
 
-    dataset = "cifar"
+    dataset = "mnist"
     if dataset == "mnist":
-        trainLoader, testLoader = train.mnist_loaders(train_batch_size=250,
-                                                      test_batch_size=250)
+        trainLoader, testLoader = train.mnist_loaders(train_batch_size=32,
+                                                      test_batch_size=32)
         in_dim = 28
         in_channels = 1
     elif dataset == "cifar":
@@ -57,16 +57,12 @@ if __name__ == "__main__":
         torch.manual_seed(seed)
         numpy.random.seed(seed)
 
-        LipConvNet = train.Noden_LipschitzConvNet(sp.Broyden,
-                                                  in_dim=in_dim,
-                                                  in_channels=in_channels,
-                                                  out_channels=width,
-                                                  alpha=alpha,
-                                                  max_iter=max_iter,
-                                                  tol=tol,
-                                                  m=m,
-                                                  gamma=gamma,
-                                                  pool=4)
+        LipConvNet = train.SingleConvNet(sp.FISTA,
+                                         in_dim=in_dim,
+                                         out_channels=width,
+                                         max_iter=max_iter,
+                                         tol=tol,
+                                         m=m)
 
         # LipConvNet.mon.load_state_dict(torch.load('./FISTA_Test_model.params'))
 

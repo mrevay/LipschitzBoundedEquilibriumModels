@@ -263,17 +263,25 @@ class MONLipConv(nn.Module):
         UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U))
 
         G = self.Wout.weight
-        zp = F.avg_pool2d(z[-1], self.pool).view(z[0].shape[0], -1)
+        zp = F.avg_pool2d(z[-1], self.pool)
+        zpvec = zp.view(z[0].shape[0], -1)
 
-        GTGz = (zp @ G.T) @ G
+        pTGTGpz = self.pool_adjoint(((zpvec @ G.T) @ G).view_as(zp))
+        # pTGTGz = self.pool_adjoint(GTGz.view_as(zp))
 
         z_out = (1 - self.m) * z[0] - ATAz + Bz - BTz - \
-            0.5 * UUTz / self.gamma - 0.5 * GTGz.view_as(z[0]) / self.gamma
-
-        def inner(x, y):
-            return (x*y).sum()
+            0.5 * UUTz / self.gamma - 0.5 * pTGTGpz.view_as(z[0]) / self.gamma
 
         return (z_out,)
+
+    def pool_adjoint(self, x):
+        'Calculate the adjoint of average pooling operator'
+
+        assert self.shp[0] % self.pool == 0, "Pooling factor must be multiple of padded image width"
+
+        adj = torch.nn.functional.interpolate(
+            x, size=self.shp) / self.pool**2
+        return adj
 
     def multiply_transpose(self, *g):
         # A = self.A.weight / self.A.weight.view(-1).norm()
@@ -291,12 +299,14 @@ class MONLipConv(nn.Module):
 
         G = self.Wout.weight
 
-        gp = F.avg_pool2d(g[-1], self.pool).view(g[0].shape[0], -1)
-        # Gz = (zp @ G.T)
-        GTGz = (gp @ G.T) @ G
+        gp = F.avg_pool2d(g[-1], self.pool)
+        gpvec = gp.view(g[0].shape[0], -1)
+        # GTGz = (gp @ G.T) @ G
+
+        pTGTGpz = self.pool_adjoint(((gpvec @ G.T) @ G).view_as(gp))
 
         g_out = (1 - self.m) * g[0] - ATAg - Bg + BTg - \
-            0.5 * UUTz / self.gamma - 0.5 * GTGz.view_as(g[0]) / self.gamma
+            0.5 * UUTz / self.gamma - 0.5 * pTGTGpz.view_as(g[0]) / self.gamma
 
         return (g_out,)
 
