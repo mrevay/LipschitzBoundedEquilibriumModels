@@ -270,17 +270,14 @@ class LBEN_Lip_Conv(nn.Module):
         BTz = self.uncpad(F.conv_transpose2d(self.cpad(z[0]), B))
 
         #  Calculate U U' psi^{-1} z
-        UTz = F.conv_transpose2d(self.cpad(z[0] / Psi), U)
-        UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U))
+        UTz = F.conv_transpose2d(z[0]/Psi, U)
+        UUTz = F.conv2d(UTz, U)
 
         G = self.Wout.weight
         zp = F.avg_pool2d(z[-1], self.pool)
         zpvec = zp.view(z[0].shape[0], -1)
 
         pTGTGpz = self.pool_adjoint(((zpvec @ G.T) @ G).view_as(zp))
-        # pTGTGz = self.pool_adjoint(GTGz.view_as(zp))
-
-        # Psi = torch.ones_like(self.psi)[None, ...]
 
         z_out = z[0] - 0.5 * UUTz / self.gamma  \
             - Psi * (self.m * z[0] + ATAz - Bz + BTz +
@@ -304,8 +301,9 @@ class LBEN_Lip_Conv(nn.Module):
         BTg = self.uncpad(F.conv_transpose2d(self.cpad(gpsi), B))
 
         # Calculate Psi^{-1} U U' z
-        UTz = F.conv_transpose2d(self.cpad(g[0]), U)
-        UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U)) / Psi
+        UTz = F.conv_transpose2d(g[0], U)
+        # UUTz = self.uncpad(F.conv2d(self.cpad(UTz), U)) / Psi
+        UUTz = F.conv2d(UTz, U) / Psi
 
         G = self.Wout.weight
 
@@ -566,6 +564,7 @@ if __name__ == "__main__":
     # Lipschitz Bounded Convolutional
     z = torch.randn(batches, n, p, p)
     model = LBEN_Lip_Conv(input_channels, n, 10, 1E-1, (p, p), pool=4)
+    model.psi.data = torch.randn_like(model.psi)
     Wz = model.multiply(z)
     WTWz = model.multiply_transpose(Wz[0])
 

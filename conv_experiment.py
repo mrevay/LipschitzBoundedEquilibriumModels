@@ -8,8 +8,8 @@ import numpy
 import torch
 import train
 import splitting as sp
-import matplotlib
-matplotlib.use("TkAgg")
+# import matplotlib
+# matplotlib.use("TkAgg")
 
 
 if __name__ == "__main__":
@@ -36,45 +36,96 @@ if __name__ == "__main__":
         pool = 2
 
     load_models = False
-    alpha = 0.005
-    epochs = 10
-    seed = 4
+    alpha = 0.05
+    epochs = 60
+    seed = 1
     tol = 1E-2
-    width = 200
+    width = 80
     lr_decay_steps = 5
     max_iter = 2000
-    m = 5.0
+    m = 1.0
 
-    path = './models/conv_experiment/'
+    path = './models/conv_experiment_v2/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     torch.manual_seed(seed)
     numpy.random.seed(seed)
 
+    # Train and test Single layer convolutional LBEN
+    LbenConvNet = train.LBENConvNet(sp.FISTA,
+                                    in_dim=in_dim,
+                                    in_channels=in_channels,
+                                    out_channels=width,
+                                    alpha=alpha,
+                                    max_iter=max_iter,
+                                    tol=tol,
+                                    m=m)
+
+    train, val = train.train(trainLoader, testLoader,
+                             LbenConvNet,
+                             max_lr=1e-3,
+                             lr_mode='step',
+                             step=lr_decay_steps,
+                             change_mo=False,
+                             epochs=epochs,
+                             print_freq=100,
+                             tune_alpha=False,
+                             warmstart=False)
+
+    name = 'lben_conv_w{:d}'.format(width)
+    torch.save(LbenConvNet.state_dict(), path + name + '.params')
+
+    LbenConvNet.mon.tol = 1E-3
+    res = train.test_robustness(LbenConvNet, testLoader)
+    res["train"] = train
+    res["val"] = val
+    io.savemat(path + name + ".mat", res)
+
+    # Compare with unbounded Single Conv Net
+    ConvNet = train.SingleConvNet(sp.FISTA,
+                                  in_dim=in_dim,
+                                  in_channels=in_channels,
+                                  out_channels=width,
+                                  alpha=alpha,
+                                  max_iter=max_iter,
+                                  tol=tol,
+                                  m=m)
+
+    train, val = train.train(trainLoader, testLoader,
+                             ConvNet,
+                             max_lr=1e-3,
+                             lr_mode='step',
+                             step=lr_decay_steps,
+                             change_mo=False,
+                             epochs=epochs,
+                             print_freq=100,
+                             tune_alpha=False,
+                             warmstart=False)
+
+    name = 'mon_conv_w{:d}'.format(width)
+    torch.save(ConvNet.state_dict(), path + name + '.params')
+
+    ConvNet.mon.tol = 1E-3
+    res = train.test_robustness(ConvNet, testLoader)
+    res["train"] = train
+    res["val"] = val
+    io.savemat(path + name + ".mat", res)
+
     # Lipschitz network
-    for gamma in [50]:
+    for gamma in [0.5]:
         torch.manual_seed(seed)
         numpy.random.seed(seed)
 
-        LipConvNet = train.SingleConvNet(sp.FISTA,
-                                         in_dim=in_dim,
-                                         in_channels=in_channels,
-                                         out_channels=width,
-                                         alpha=alpha,
-                                         max_iter=max_iter,
-                                         tol=tol,
-                                         m=m)
-
-        # LipConvNet = train.LBENLipConvNet(sp.FISTA,
-        #                                   in_dim=in_dim,
-        #                                   in_channels=in_channels,
-        #                                   out_channels=width,
-        #                                   alpha=alpha,
-        #                                   max_iter=max_iter,
-        #                                   tol=tol,
-        #                                   m=m,
-        #                                   gamma=gamma,
-        #                                   pool=pool)
+        LipConvNet = train.LBENLipConvNet(sp.FISTA,
+                                          in_dim=in_dim,
+                                          in_channels=in_channels,
+                                          out_channels=width,
+                                          alpha=alpha,
+                                          max_iter=max_iter,
+                                          tol=tol,
+                                          m=m,
+                                          gamma=gamma,
+                                          pool=pool)
 
         Lip_train, Lip_val = train.train(trainLoader, testLoader,
                                          LipConvNet,
