@@ -5,6 +5,7 @@ import torchvision.datasets as dset
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import torch.optim as optim
+import torch.autograd as grad
 import mon
 import numpy as np
 import time
@@ -15,6 +16,7 @@ import matplotlib.pyplot as plt
 
 import utils
 import NODEN
+import splitting as sp
 import lben
 
 import time
@@ -122,6 +124,18 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
                 model.mon.linear_module.Lambda.data[model.mon.linear_module.Lambda.data <= 1E-3] = 1E-3
             if hasattr(model.mon.linear_module, 'Psi'):
                 model.mon.linear_module.Psi.data[model.mon.linear_module.Psi.data <= 1E-3] = 1E-3
+
+            if hasattr(model.mon.linear_module, 'g'):
+                if model.mon.linear_module.g < 0.0:
+                    model.mon.linear_module.g.data = 0.0
+
+            if hasattr(model.mon.linear_module, 'a'):
+                if model.mon.linear_module.a < 0.0:
+                    model.mon.linear_module.a.data = 0.0
+
+            if hasattr(model.mon.linear_module, 'u'):
+                if model.mon.linear_module.u < 0.0:
+                    model.mon.linear_module.u.data = 0.0
 
         EPOCH_TIMES.append(time.time() - t0)
         if lr_mode == 'step':
@@ -378,14 +392,37 @@ class NODENFcNet_uncon(nn.Module):
 
 class LBENConvNet(nn.Module):
 
-    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, **kwargs):
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, **kwargs):
         super().__init__()
         n = in_dim + 2
         shp = (n, n)
-        self.pool = 4
+        self.pool = pool
         self.out_dim = out_channels * (n // self.pool) ** 2
         linear_module = lben.LBEN_Conv(
-            in_dim, in_channels, out_channels, shp, m=m,)
+            in_dim, in_channels, out_channels, shp, m=m)
+
+        nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+        self.Wout = nn.Linear(self.out_dim, 10)
+
+    def forward(self, x):
+        x = F.pad(x, (1, 1, 1, 1))
+        z = self.mon(x)
+        z = F.avg_pool2d(z[-1], self.pool)
+        return self.Wout(z.view(z.shape[0], -1))
+
+
+class LBENConvNet_Test_Init(nn.Module):
+
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, **kwargs):
+        super().__init__()
+        n = in_dim + 2
+        shp = (n, n)
+        self.pool = pool
+        self.out_dim = out_channels * (n // self.pool) ** 2
+        linear_module = lben.LBEN_Conv_Test_Init(
+            in_dim, in_channels, out_channels, shp, m=m)
 
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
         self.mon = splittingMethod(
@@ -456,11 +493,11 @@ class Noden_LipschitzConvNet_no_pool(nn.Module):
 
 class SingleConvNet(nn.Module):
 
-    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, **kwargs):
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, **kwargs):
         super().__init__()
         n = in_dim + 2
         shp = (n, n)
-        self.pool = 1
+        self.pool = pool
         self.out_dim = out_channels * (n // self.pool) ** 2
         linear_module = mon.MONSingleConv(in_channels, out_channels, shp, m=m)
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
@@ -491,6 +528,38 @@ class LipConvNet(nn.Module):
         linear_module = mon.MONLipConv(
             in_channels, out_channels,  self.out_dim,
             shp, m=m, pool=self.pool, gamma=gamma)
+
+        nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+
+    def forward(self, x):
+        x = F.pad(x, (1, 1, 1, 1))
+        z = self.mon(x)
+        z = F.avg_pool2d(z[-1], self.pool)
+        return self.mon.linear_module.Wout(z.view(z.shape[0], -1))
+
+
+class LBENLipConvNet_Test_Init(nn.Module):
+
+    def __init__(self, splittingMethod, gamma, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
+        super().__init__()
+        self.unpadded_size = in_dim
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        n = in_dim + 2
+        shp = (n, n)
+        self.pool = pool
+        self.out_dim = out_channels * (n // self.pool) ** 2
+
+        linear_module = lben.LBEN_Lip_Conv_V2(
+            in_channels, out_channels,  self.out_dim, gamma,
+            shp, m=m, pool=self.pool)
+
+        # linear_module = NODEN.LBENLipConv(
+        #     in_channels, out_channels,  self.out_dim,
+        #     shp, m=m, pool=self.pool, gamma=gamma)
 
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
         self.mon = splittingMethod(
@@ -535,6 +604,42 @@ class LBENLipConvNet(nn.Module):
         return self.mon.linear_module.Wout(z.view(z.shape[0], -1))
 
 
+class LBENLipConvNetV2(nn.Module):
+
+    def __init__(self, splittingMethod, gamma, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
+        super().__init__()
+        self.unpadded_size = in_dim
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        n = in_dim + 2
+        shp = (n, n)
+        self.pool = pool
+        self.out_dim = out_channels * (n // self.pool) ** 2
+
+        linear_module = lben.LBEN_Lip_Conv_V2(
+            in_channels, out_channels,  self.out_dim, gamma,
+            shp, m=m, pool=self.pool)
+
+        # linear_module = NODEN.LBENLipConv(
+        #     in_channels, out_channels,  self.out_dim,
+        #     shp, m=m, pool=self.pool, gamma=gamma)
+
+        nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
+        self.mon = splittingMethod(
+            linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+
+    def forward(self, x):
+        x = F.pad(x, (1, 1, 1, 1))
+        z = self.mon(x)
+        z = F.avg_pool2d(z[-1], self.pool)
+        G = self.mon.linear_module.Wout.weight
+        Wout = torch.sqrt(self.mon.linear_module.g) * G / G.view(-1).norm()
+        bias = self.mon.linear_module.Wout.bias[None, :]
+        return bias + (z.view(z.shape[0], -1)) @ Wout.T
+        # return self.mon.linear_module.Wout(z.view(z.shape[0], -1))
+
+
 class UnconConvNet(nn.Module):
 
     def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, **kwargs):
@@ -577,12 +682,14 @@ class MultiConvNet(nn.Module):
         return self.Wout(z)
 
 
-def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True, Lip_batches=50):
+def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=50):
 
-    channels = model.in_channels
-    dim = model.unpadded_size
+    channels = data_stats["feature_size"][0]
+    dimu = data_stats["feature_size"][1]
+    dimv = data_stats["feature_size"][2]
     maxIter = 1000
     model = model.eval()
+    model.to(device)
     # Lip_batches = 50  # Number of points to use when calculating the LC
 
     # Test nominal performance.
@@ -609,7 +716,7 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True, Lip_
     # Estimate Lipschitz constant of model
     if check_Lipschitz:
         Lip = 0
-        u = torch.randn((Lip_batches, channels, dim, dim),
+        u = torch.randn((Lip_batches, channels, dimu, dimv),
                         requires_grad=True, device=device)
         v = torch.randn_like(u, requires_grad=True, device=device)
 
@@ -651,13 +758,12 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True, Lip_
     errors = []
 
     # Perform adversarial attacks
-    bound_a = -0.1307 / 0.3081  # Calc. bound on pixel val due to normalization
-    bound_b = (1 - 0.1307) / 0.3081
-    fmodel = fb.PyTorchModel(model, bounds=(bound_a, bound_b))
-    # attack = fb.attacks.L2ProjectedGradientDescentAttack()
-    # attack = fb.attacks.L2DeepFoolAttack()
+    mu = data_stats["mean"]
+    std = data_stats["std"]
+
+    preprocessing = dict(mean=mu, std=std, axis=-3)
+    fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
     attack = fb.attacks.L2FastGradientAttack()
-    # attack = fb.attacks.L2CarliniWagnerAttack()
     raw, advs, success = attack(fmodel, u, target, epsilons=epsilons)
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
@@ -668,7 +774,8 @@ def test_robustness(model, testLoader, device='cuda', check_Lipschitz=True, Lip_
     return results
 
 
-def estimate_Lip(model, Lip_batches, channels, dim):   # Estimate Lipschitz constant of model
+def estimate_Lip(model, Lip_batches, channels, dim):
+    # Estimate Lipschitz constant of model
 
     device = "cuda" if torch.cuda.is_available else "cpu"
     maxIter = 500
@@ -704,3 +811,86 @@ def estimate_Lip(model, Lip_batches, channels, dim):   # Estimate Lipschitz cons
                     break
     print()
     print()
+
+
+if __name__ == "__main__":
+    torch.set_default_tensor_type(torch.DoubleTensor)
+
+    in_dim = 8
+    in_channels = 2
+    pool = 5
+    width = 3
+    max_iter = 4000
+    tol = 1E-7
+    m = 1.0
+    alpha = 0.2
+
+    # Tol for grad check
+    atol = 1E-4
+    rtol = 0.001
+
+    x = torch.randn(5, 2, 8, 8, requires_grad=True)
+
+    print("Numerically testing gradients of models.")
+
+    ConvNet = NODEN_Lip_Net(sp.MONForwardBackwardSplitting,
+                            1.0,
+                            in_channels*in_dim**2,
+                            width=width,
+                            m=1.0,
+                            tol=tol,
+                            max_iter=max_iter,
+                            alpha=alpha,
+                            verbose=True)
+
+    print("\t ConvNet correct grad: ", grad.gradcheck(
+        ConvNet, x, atol=atol, rtol=rtol))
+
+    # Change this to the name of one of the above models to check gradient.
+
+    # alpha = 0.5
+    ConvNet = LBENConvNet(sp.MONForwardBackwardSplitting,
+                          in_dim=in_dim,
+                          in_channels=in_channels,
+                          out_channels=width,
+                          alpha=alpha,
+                          max_iter=max_iter,
+                          tol=tol,
+                          m=m,
+                          pool=pool,
+                          verbose=False)
+
+    print("\t ConvNet correct grad: ", grad.gradcheck(
+        ConvNet, x, atol=atol, rtol=rtol))
+
+    # alpha = 0.5
+    # ConvNet = LBENLipConvNet_Test_Init(sp.MONForwardBackwardSplitting,
+    #                                    in_dim=in_dim,
+    #                                    in_channels=in_channels,
+    #                                    out_channels=width,
+    #                                    alpha=alpha,
+    #                                    max_iter=max_iter,
+    #                                    tol=tol,
+    #                                    m=1.0,
+    #                                    pool=pool,
+    #                                    gamma=1.0,
+    #                                    verbose=True)
+
+    # print("\t LipConvNet correct grad: ", grad.gradcheck(
+    #     ConvNet, x, atol=atol, rtol=rtol))
+
+    alpha = 0.5
+    ConvNet = LBENLipConvNetV2(sp.MONForwardBackwardSplitting,
+                               in_dim=in_dim,
+                               in_channels=in_channels,
+                               out_channels=width,
+                               alpha=alpha,
+                               max_iter=max_iter,
+                               tol=tol,
+                               m=1.0,
+                               pool=pool,
+                               gamma=1.0,
+                               verbose=True)
+
+    print("\t LipConvNet correct grad: ", grad.gradcheck(
+        ConvNet, x, atol=atol, rtol=rtol))
