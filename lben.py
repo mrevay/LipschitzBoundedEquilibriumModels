@@ -144,7 +144,7 @@ class LBEN_Lip_FC(nn.Module):
 class LBEN_Conv(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
 
-    def __init__(self, in_dim, in_channels, out_channels, shp, kernel_size=3, m=1.0):
+    def __init__(self, in_dim, in_channels, out_channels, shp, kernel_size=3, m=1.0, metric="full"):
         super().__init__()
         self.U = nn.Conv2d(in_channels, out_channels, kernel_size)
         self.A = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
@@ -155,8 +155,25 @@ class LBEN_Conv(nn.Module):
         self.shp = shp
         self.m = m
 
-        self.psi = nn.Parameter(torch.zeros(
-            (1, out_channels, shp[0], shp[1])))
+        self.metric = metric
+        if metric == "full":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, out_channels, shp[0], shp[1])))
+
+        elif metric == "channels":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, out_channels, 1, 1)))
+
+        elif metric == "image":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, 1, shp[0], shp[1])))
+
+        elif metric == "identity":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, 1, 1, 1)))
+
+        else:
+            raise Exception("Invalid metric chosen")
 
     def cpad(self, x):
         return F.pad(x, self.pad, mode="circular")
@@ -178,7 +195,12 @@ class LBEN_Conv(nn.Module):
         return (F.conv2d(self.cpad(x), self.U.weight, self.U.bias),)
 
     def multiply(self, *z):
-        Psi = torch.exp(self.psi)
+
+        if self.metric == "identity":
+            Psi = torch.ones_like(self.psi)
+        else:
+            Psi = torch.exp(self.psi)
+
         A = self.A.weight / self.A.weight.view(-1).norm()
         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
 
@@ -191,7 +213,12 @@ class LBEN_Conv(nn.Module):
         return (z_out,)
 
     def multiply_transpose(self, *g):
-        Psi = torch.exp(self.psi)
+
+        if self.metric == "identity":
+            Psi = torch.ones_like(self.psi)
+        else:
+            Psi = torch.exp(self.psi)
+
         PsiG = Psi * g[0]
         A = self.A.weight / self.A.weight.view(-1).norm()
         B = self.h * self.B.weight / self.B.weight.view(-1).norm()

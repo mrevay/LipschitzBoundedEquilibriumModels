@@ -13,8 +13,9 @@ import splitting as sp
 
 
 if __name__ == "__main__":
+    # torch.set_default_tensor_type(torch.DoubleTensor)
 
-    dataset = "cifar"
+    dataset = "mnist"
     if dataset == "mnist":
         trainLoader, testLoader = train.mnist_loaders(train_batch_size=200,
                                                       test_batch_size=200)
@@ -50,15 +51,18 @@ if __name__ == "__main__":
                       "mean": (0.4377, 0.4438, 0.4728),
                       "std": (0.1980, 0.2010, 0.1970)}
 
-    load_models = False
-    alpha = 0.5
-    epochs = 40
+    # Choose between full, Identity, Channel, Image
+    metric = "full"
+    alpha = 1.0
+    epochs = 10
     seed = 1
     tol = 1E-2
-    width = 81
+    # width = 81
+    width = 21
     lr_decay_steps = 25
     max_iter = 150
-    m = 0.1
+    # m = 0.1
+    m = 1.0
 
     path = './models/conv_experiment_v2/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -67,36 +71,37 @@ if __name__ == "__main__":
     numpy.random.seed(seed)
 
     # # Train and test Single layer convolutional LBEN
-    # LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
-    #                                 in_dim=in_dim,
-    #                                 in_channels=in_channels,
-    #                                 out_channels=width,
-    #                                 alpha=alpha,
-    #                                 max_iter=max_iter,
-    #                                 tol=tol,
-    #                                 m=m,
-    #                                 pool=pool,
-    #                                 verbose=False)
+    LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
+                                    in_dim=in_dim,
+                                    in_channels=in_channels,
+                                    out_channels=width,
+                                    alpha=alpha,
+                                    max_iter=max_iter,
+                                    metric=metric,
+                                    tol=tol,
+                                    m=m,
+                                    pool=pool,
+                                    verbose=False)
 
-    # train_res, val_res = train.train(trainLoader, testLoader,
-    #                                  LbenConvNet,
-    #                                  max_lr=1e-3,
-    #                                  lr_mode='step',
-    #                                  step=lr_decay_steps,
-    #                                  change_mo=False,
-    #                                  epochs=epochs,
-    #                                  print_freq=100,
-    #                                  tune_alpha=True,
-    #                                  warmstart=False)
+    train_res, val_res = train.train(trainLoader, testLoader,
+                                     LbenConvNet,
+                                     max_lr=1e-3,
+                                     lr_mode='step',
+                                     step=lr_decay_steps,
+                                     change_mo=False,
+                                     epochs=epochs,
+                                     print_freq=100,
+                                     tune_alpha=True,
+                                     warmstart=False)
 
-    # name = 'lben_conv_w{:d}'.format(width)
-    # torch.save(LbenConvNet.state_dict(), path + name + '.params')
+    name = 'lben_conv_w{:d}'.format(width)
+    torch.save(LbenConvNet.state_dict(), path + name + '.params')
 
-    # LbenConvNet.mon.tol = 1E-3
-    # res = train.test_robustness(LbenConvNet, testLoader, data_stats)
-    # res["train"] = train_res
-    # res["val"] = val_res
-    # io.savemat(path + name + ".mat", res)
+    LbenConvNet.mon.tol = 1E-3
+    res = train.test_robustness(LbenConvNet, testLoader, data_stats)
+    res["train"] = train_res
+    res["val"] = val_res
+    io.savemat(path + name + ".mat", res)
 
     # # Compare with unbounded Single Conv Net
     # ConvNet = train.SingleConvNet(sp.MONForwardBackwardSplitting,
@@ -131,7 +136,9 @@ if __name__ == "__main__":
     # io.savemat(path + name + ".mat", res)
 
     # Lipschitz network
-    for gamma in [30.0, 10, 8.0, 5.0, 3.0, 0.8, 0.5, 0.3, 0.2]:
+    # for gamma in [30.0, 10, 8.0, 5.0, 3.0, 0.8, 0.5, 0.3, 0.2]:
+
+    for gamma in [0.5]:
         torch.manual_seed(seed)
         numpy.random.seed(seed)
 
@@ -158,12 +165,12 @@ if __name__ == "__main__":
                                          warmstart=False)
 
         name = 'lben_conv_w{:d}_L{:1.1f}'.format(width, gamma)
-        torch.save(LipConvNet.state_dict(), path + name + '.params')
+        # torch.save(LipConvNet.state_dict(), path + name + '.params')
 
-        LipConvNet.mon.tol = 1E-3
+        LipConvNet.mon.tol = 1E-4
         res = train.test_robustness(LipConvNet, testLoader, data_stats)
         res["train"] = train_res
         res["val"] = val_res
-        io.savemat(path + name + ".mat", res)
+        # io.savemat(path + name + ".mat", res)
 
         print("fin")

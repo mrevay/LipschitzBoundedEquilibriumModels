@@ -128,14 +128,17 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
             if hasattr(model.mon.linear_module, 'g'):
                 if model.mon.linear_module.g < 0.0:
                     model.mon.linear_module.g.data = 0.0
+                    print("------------------Performing projection-------------------")
 
             if hasattr(model.mon.linear_module, 'a'):
                 if model.mon.linear_module.a < 0.0:
                     model.mon.linear_module.a.data = 0.0
+                    print("------------------Performing projection-------------------")
 
             if hasattr(model.mon.linear_module, 'u'):
                 if model.mon.linear_module.u < 0.0:
                     model.mon.linear_module.u.data = 0.0
+                    print("------------------Performing projection-------------------")
 
         EPOCH_TIMES.append(time.time() - t0)
         if lr_mode == 'step':
@@ -392,14 +395,14 @@ class NODENFcNet_uncon(nn.Module):
 
 class LBENConvNet(nn.Module):
 
-    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, **kwargs):
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, metric="full", ** kwargs):
         super().__init__()
         n = in_dim + 2
         shp = (n, n)
         self.pool = pool
         self.out_dim = out_channels * (n // self.pool) ** 2
         linear_module = lben.LBEN_Conv(
-            in_dim, in_channels, out_channels, shp, m=m)
+            in_dim, in_channels, out_channels, shp, m=m, metric=metric)
 
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
         self.mon = splittingMethod(
