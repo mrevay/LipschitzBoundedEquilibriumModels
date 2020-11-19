@@ -67,7 +67,7 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # # Train and test Single layer convolutional LBEN
-    for metric in ["identity", "full", "channels", "image"]:
+    for metric in ["full", "channels", "image"]:
         torch.manual_seed(seed)
         numpy.random.seed(seed)
 
