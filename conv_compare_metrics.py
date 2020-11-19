@@ -11,12 +11,11 @@ import splitting as sp
 # import matplotlib
 # matplotlib.use("TkAgg")
 
-# ssh - i D: \Documents\ssh_keys\key Max@35.189.56.229
 
 if __name__ == "__main__":
     # torch.set_default_tensor_type(torch.DoubleTensor)
 
-    dataset = "mnist"
+    dataset = "cifar"
     if dataset == "mnist":
         trainLoader, testLoader = train.mnist_loaders(train_batch_size=200,
                                                       test_batch_size=200)
@@ -29,7 +28,7 @@ if __name__ == "__main__":
 
     elif dataset == "cifar":
         trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
-                                                      test_batch_size=250,
+                                                      test_batch_size=128,
                                                       augment=False)
 
         in_dim = 32
@@ -58,8 +57,8 @@ if __name__ == "__main__":
     epochs = 40
     seed = 1
     tol = 1E-2
-    width = 54
-    lr_decay_steps = 10
+    width = 81
+    lr_decay_steps = 25
     max_iter = 250
     m = 0.1
 
