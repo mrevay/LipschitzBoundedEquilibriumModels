@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import numpy as np
 
 import cvxpy as cp
-from cvxpylayers.torch import CvxpyLayer
 
 
 class MONSingleFc(nn.Module):

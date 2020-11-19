@@ -13,7 +13,7 @@ import splitting as sp
 
 
 if __name__ == "__main__":
-    # torch.set_default_tensor_type(torch.DoubleTensor)
+    torch.set_default_tensor_type(torch.DoubleTensor)
 
     dataset = "mnist"
     if dataset == "mnist":
@@ -53,14 +53,14 @@ if __name__ == "__main__":
 
     # Choose between full, Identity, Channel, Image
     metric = "full"
-    alpha = 1.0
+    alpha = 0.25
     epochs = 10
     seed = 1
     tol = 1E-2
     # width = 81
     width = 21
     lr_decay_steps = 25
-    max_iter = 150
+    max_iter = 500
     # m = 0.1
     m = 1.0
 
@@ -71,37 +71,37 @@ if __name__ == "__main__":
     numpy.random.seed(seed)
 
     # # Train and test Single layer convolutional LBEN
-    LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
-                                    in_dim=in_dim,
-                                    in_channels=in_channels,
-                                    out_channels=width,
-                                    alpha=alpha,
-                                    max_iter=max_iter,
-                                    metric=metric,
-                                    tol=tol,
-                                    m=m,
-                                    pool=pool,
-                                    verbose=False)
+    # LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
+    #                                 in_dim=in_dim,
+    #                                 in_channels=in_channels,
+    #                                 out_channels=width,
+    #                                 alpha=alpha,
+    #                                 max_iter=max_iter,
+    #                                 metric=metric,
+    #                                 tol=tol,
+    #                                 m=m,
+    #                                 pool=pool,
+    #                                 verbose=False)
 
-    train_res, val_res = train.train(trainLoader, testLoader,
-                                     LbenConvNet,
-                                     max_lr=1e-3,
-                                     lr_mode='step',
-                                     step=lr_decay_steps,
-                                     change_mo=False,
-                                     epochs=epochs,
-                                     print_freq=100,
-                                     tune_alpha=True,
-                                     warmstart=False)
+    # train_res, val_res = train.train(trainLoader, testLoader,
+    #                                  LbenConvNet,
+    #                                  max_lr=1e-3,
+    #                                  lr_mode='step',
+    #                                  step=lr_decay_steps,
+    #                                  change_mo=False,
+    #                                  epochs=epochs,
+    #                                  print_freq=100,
+    #                                  tune_alpha=True,
+    #                                  warmstart=False)
 
-    name = 'lben_conv_w{:d}'.format(width)
-    torch.save(LbenConvNet.state_dict(), path + name + '.params')
+    # name = 'lben_conv_w{:d}'.format(width)
+    # torch.save(LbenConvNet.state_dict(), path + name + '.params')
 
-    LbenConvNet.mon.tol = 1E-3
-    res = train.test_robustness(LbenConvNet, testLoader, data_stats)
-    res["train"] = train_res
-    res["val"] = val_res
-    io.savemat(path + name + ".mat", res)
+    # LbenConvNet.mon.tol = 1E-3
+    # res = train.test_robustness(LbenConvNet, testLoader, data_stats)
+    # res["train"] = train_res
+    # res["val"] = val_res
+    # io.savemat(path + name + ".mat", res)
 
     # # Compare with unbounded Single Conv Net
     # ConvNet = train.SingleConvNet(sp.MONForwardBackwardSplitting,
@@ -138,20 +138,22 @@ if __name__ == "__main__":
     # Lipschitz network
     # for gamma in [30.0, 10, 8.0, 5.0, 3.0, 0.8, 0.5, 0.3, 0.2]:
 
-    for gamma in [0.5]:
+    for gamma in [2.0]:
+
         torch.manual_seed(seed)
         numpy.random.seed(seed)
 
-        LipConvNet = train.LBENLipConvNetV2(sp.MONForwardBackwardSplitting,
-                                            in_dim=in_dim,
-                                            in_channels=in_channels,
-                                            out_channels=width,
-                                            alpha=alpha,
-                                            max_iter=max_iter,
-                                            tol=tol,
-                                            m=m,
-                                            gamma=gamma,
-                                            pool=pool)
+        LipConvNet = train.LBENLipConvNet(sp.MONForwardBackwardSplitting,
+                                          in_dim=in_dim,
+                                          in_channels=in_channels,
+                                          out_channels=width,
+                                          alpha=alpha,
+                                          max_iter=max_iter,
+                                          tol=tol,
+                                          m=m,
+                                          gamma=gamma,
+                                          pool=pool,
+                                          verbose=False)
 
         train_res, val_res = train.train(trainLoader, testLoader,
                                          LipConvNet,

@@ -220,7 +220,8 @@ def mnist_loaders(train_batch_size, test_batch_size=None, swap_labels=0):
                    download=True,
                    transform=transforms.Compose([
                        transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,))
+                       transforms.Normalize((0.1307,), (0.3081,)),
+                       transforms.Lambda(lambda x: x.double())
                    ])),
         batch_size=train_batch_size,
         shuffle=True)
@@ -230,7 +231,8 @@ def mnist_loaders(train_batch_size, test_batch_size=None, swap_labels=0):
                    train=False,
                    transform=transforms.Compose([
                        transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,))
+                       transforms.Normalize((0.1307,), (0.3081,)),
+                       transforms.Lambda(lambda x: x.double())
                    ])),
         batch_size=test_batch_size,
         shuffle=False)
@@ -591,10 +593,6 @@ class LBENLipConvNet(nn.Module):
         linear_module = lben.LBEN_Lip_Conv(
             in_channels, out_channels,  self.out_dim, gamma,
             shp, m=m, pool=self.pool)
-
-        # linear_module = NODEN.LBENLipConv(
-        #     in_channels, out_channels,  self.out_dim,
-        #     shp, m=m, pool=self.pool, gamma=gamma)
 
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
         self.mon = splittingMethod(
