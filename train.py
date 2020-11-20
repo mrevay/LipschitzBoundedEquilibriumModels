@@ -210,64 +210,83 @@ def run_tune_alpha(model, x, max_alpha):
     print("--------------\n")
 
 
-def mnist_loaders(train_batch_size, test_batch_size=None, swap_labels=0):
+def mnist_loaders(train_batch_size, test_batch_size=None, use_double=True):
     if test_batch_size is None:
         test_batch_size = train_batch_size
+
+    tforms = [
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ]
+
+    if use_double:
+        tforms.append(transforms.Lambda(lambda x: x.double()))
 
     trainLoader = torch.utils.data.DataLoader(
         dset.MNIST('data',
                    train=True,
                    download=True,
-                   transform=transforms.Compose([
-                       transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,)),
-                       transforms.Lambda(lambda x: x.double())
-                   ])),
+                   transform=transforms.Compose(tforms)),
         batch_size=train_batch_size,
         shuffle=True)
 
     testLoader = torch.utils.data.DataLoader(
         dset.MNIST('data',
                    train=False,
-                   transform=transforms.Compose([
-                       transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,)),
-                       transforms.Lambda(lambda x: x.double())
-                   ])),
+                   transform=transforms.Compose(tforms)),
         batch_size=test_batch_size,
         shuffle=False)
+
     return trainLoader, testLoader
 
 
-def cifar_loaders(train_batch_size, test_batch_size=None, augment=True):
+def cifar_loaders(train_batch_size, test_batch_size=None, augment=True, use_double=True):
     if test_batch_size is None:
         test_batch_size = train_batch_size
 
     normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
                                      std=[0.2470, 0.2435, 0.2616])
 
+    transform_list = [transforms.ToTensor(),
+                      normalize]
+
+    if use_double:
+        transform_list.append(transforms.Lambda(lambda x: x.double()))
+
     if augment:
-        transforms_list = [transforms.RandomHorizontalFlip(),
-                           transforms.RandomCrop(32, 4),
-                           transforms.ToTensor(),
-                           normalize,
-                           transforms.Lambda(lambda x: x.double())]
+        aug_list = [transforms.RandomHorizontalFlip(),
+                    transforms.RandomCrop(32, 4)]
     else:
-        transforms_list = [transforms.ToTensor(),
-                           normalize,
-                           transforms.Lambda(lambda x: x.double())]
+        aug_list = []
+
+    # if augment:
+    #     transforms_list = [transforms.RandomHorizontalFlip(),
+    #                        transforms.RandomCrop(32, 4),
+    #                        transforms.ToTensor(),
+    #                        normalize]
+    # else:
+    #     transforms_list = [transforms.ToTensor(),
+    #                        normalize]
+
+    # if use_double:
+    #     transforms_list.append(transforms.Lambda(lambda x: x.double()))
 
     train_dset = dset.CIFAR10('data',
                               train=True,
                               download=True,
-                              transform=transforms.Compose(transforms_list))
+                              transform=transforms.Compose(transform_list + aug_list))
+
     test_dset = dset.CIFAR10('data',
                              train=False,
-                             transform=transforms.Compose([
-                                 transforms.ToTensor(),
-                                 normalize,
-                                 transforms.Lambda(lambda x: x.double())
-                             ]))
+                             transform=transforms.Compose(transform_list))
+
+    # test_dset = dset.CIFAR10('data',
+    #                          train=False,
+    #                          transform=transforms.Compose([
+    #                              transforms.ToTensor(),
+    #                              normalize,
+    #                              transforms.Lambda(lambda x: x.double())
+    #                          ]))
 
     trainLoader = torch.utils.data.DataLoader(train_dset, batch_size=train_batch_size,
                                               shuffle=True, pin_memory=True)

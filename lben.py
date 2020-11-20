@@ -424,7 +424,7 @@ class LBEN_Lip_Conv(nn.Module):
 class LBEN_Lip_Conv_V2(nn.Module):
     """ MON class with a single 3x3 (circular) convolution """
 
-    def __init__(self, in_channels, channels, out_dim, gamma, shp, kernel_size=3, m=1.0, pool=4):
+    def __init__(self, in_channels, channels, out_dim, gamma, shp, metric="full", kernel_size=3, m=1.0, pool=4):
         super().__init__()
 
         self.in_channels = in_channels
@@ -439,18 +439,36 @@ class LBEN_Lip_Conv_V2(nn.Module):
         self.g = nn.Parameter(torch.tensor(1.))
         self.u = nn.Parameter(torch.tensor(1.))
 
-        self.pad = 4 * ((kernel_size - 1) // 2,)
-        self.shp = shp
-        self.m = m
-
-        self.psi = nn.Parameter(torch.zeros((channels, shp[0], shp[1])))
-
         self.gamma = gamma
         self.pool = pool
 
         n = shp[0]
         self.out_dim = channels * (n // pool) ** 2
         self.Wout = nn.Linear(self.out_dim, 10)
+
+        self.pad = 4 * ((kernel_size - 1) // 2,)
+        self.shp = shp
+        self.m = m
+
+        self.metric = metric
+        if metric == "full":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, self.out_channels, shp[0], shp[1])))
+
+        elif metric == "channels":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, self.out_channels, 1, 1)))
+
+        elif metric == "image":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, 1, shp[0], shp[1])))
+
+        elif metric == "identity":
+            self.psi = nn.Parameter(torch.zeros(
+                (1, 1, 1, 1)))
+
+        else:
+            raise Exception("Invalid metric chosen")
 
     def cpad(self, x):
         return F.pad(x, self.pad, mode="circular")
@@ -484,7 +502,12 @@ class LBEN_Lip_Conv_V2(nn.Module):
 
     def multiply(self, *z):
 
-        Psi = torch.exp(self.psi)[None, ...]
+        if self.metric == "identity":
+            Psi = torch.ones_like(self.psi)
+        else:
+            Psi = torch.exp(self.psi)
+
+        # Psi = torch.exp(self.psi)[None, ...]
         # A = self.A.weight
         # B = self.B.weight
         A = self.A.weight / self.A.weight.view(-1).norm()
@@ -521,7 +544,11 @@ class LBEN_Lip_Conv_V2(nn.Module):
         B = self.b * self.B.weight / self.B.weight.view(-1).norm()
         U = self.U.weight / self.U.weight.view(-1).norm()
 
-        Psi = torch.exp(self.psi)[None, ...]
+        if self.metric == "identity":
+            Psi = torch.ones_like(self.psi)
+        else:
+            Psi = torch.exp(self.psi)
+
         gpsi = g[0] * Psi
 
         Ag = F.conv2d(self.cpad(gpsi), A)
