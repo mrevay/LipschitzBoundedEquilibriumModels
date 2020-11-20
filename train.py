@@ -602,7 +602,7 @@ class LBENLipConvNet_Test_Init(nn.Module):
 
 class LBENLipConvNet(nn.Module):
 
-    def __init__(self, splittingMethod, gamma, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
+    def __init__(self, splittingMethod, gamma, metric="full", in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
         super().__init__()
         self.unpadded_size = in_dim
         self.in_channels = in_channels
@@ -630,7 +630,7 @@ class LBENLipConvNet(nn.Module):
 
 class LBENLipConvNetV2(nn.Module):
 
-    def __init__(self, splittingMethod, gamma, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
+    def __init__(self, splittingMethod, gamma,  metric="full", in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
         super().__init__()
         self.unpadded_size = in_dim
         self.in_channels = in_channels
