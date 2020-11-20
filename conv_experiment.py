@@ -14,7 +14,7 @@ import splitting as sp
 
 if __name__ == "__main__":
 
-    use_double = False
+    use_double = True
     dataset = "cifar"
 
     if use_double:
@@ -58,76 +58,77 @@ if __name__ == "__main__":
                       "std": (0.1980, 0.2010, 0.1970)}
 
     # Choose between full, Identity, Channel, Image
-    alpha = 0.5
+    alpha = 0.25
     max_alpha = 0.5
     epochs = 25
     seed = 1
     tol = 1E-2
     width = 81
     lr_decay_steps = 15
-    max_iter = 250
+    max_iter = 100
     m = 1.0
 
     path = './models/conv_experiment_v2/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    for metric in ["identity", "full", "channels", "image"]:
+    for metric in ["full", "identity", "channels", "image"]:
 
         torch.manual_seed(seed)
         numpy.random.seed(seed)
 
-        # # Train and test Single layer convolutional LBEN
-        LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
-                                        in_dim=in_dim,
-                                        in_channels=in_channels,
-                                        out_channels=width,
-                                        alpha=alpha,
-                                        max_iter=max_iter,
-                                        metric=metric,
-                                        tol=tol,
-                                        m=m,
-                                        pool=pool,
-                                        verbose=False)
+        # # # Train and test Single layer convolutional LBEN
+        # LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
+        #                                 in_dim=in_dim,
+        #                                 in_channels=in_channels,
+        #                                 out_channels=width,
+        #                                 alpha=alpha,
+        #                                 max_iter=max_iter,
+        #                                 metric=metric,
+        #                                 tol=tol,
+        #                                 m=m,
+        #                                 pool=pool,
+        #                                 verbose=False)
 
-        train_res, val_res = train.train(trainLoader, testLoader,
-                                         LbenConvNet,
-                                         max_lr=1e-3,
-                                         lr_mode='step',
-                                         step=lr_decay_steps,
-                                         change_mo=False,
-                                         epochs=epochs,
-                                         print_freq=100,
-                                         tune_alpha=True,
-                                         max_alpha=max_alpha,
-                                         warmstart=False)
+        # train_res, val_res = train.train(trainLoader, testLoader,
+        #                                  LbenConvNet,
+        #                                  max_lr=1e-3,
+        #                                  lr_mode='step',
+        #                                  step=lr_decay_steps,
+        #                                  change_mo=False,
+        #                                  epochs=epochs,
+        #                                  print_freq=100,
+        #                                  tune_alpha=True,
+        #                                  max_alpha=max_alpha,
+        #                                  warmstart=False)
 
-        name = metric + '_conv_w{:d}'.format(width)
-        torch.save(LbenConvNet.state_dict(), path + name + '.params')
+        # name = metric + '_conv_w{:d}'.format(width)
+        # torch.save(LbenConvNet.state_dict(), path + name + '.params')
 
-        LbenConvNet.mon.tol = 1E-3
-        res = train.test_robustness(LbenConvNet, testLoader, data_stats)
-        res["train"] = train_res
-        res["val"] = val_res
+        # LbenConvNet.mon.tol = 1E-3
+        # res = train.test_robustness(LbenConvNet, testLoader, data_stats)
+        # res["train"] = train_res
+        # res["val"] = val_res
 
-        io.savemat(path + name + ".mat", res)
+        # io.savemat(path + name + ".mat", res)
 
-        for gamma in [3.0, 8.0, 1.0]:
+        # for gamma in [5.0, 3.0, 1.0]:
+        for gamma in [5.0, 3.0, 1.0]:
 
             torch.manual_seed(seed)
             numpy.random.seed(seed)
 
-            LipConvNet = train.LBENLipConvNet(sp.MONForwardBackwardSplitting,
-                                              in_dim=in_dim,
-                                              in_channels=in_channels,
-                                              out_channels=width,
-                                              alpha=alpha,
-                                              max_iter=max_iter,
-                                              metric=metric,
-                                              tol=tol,
-                                              m=m,
-                                              gamma=gamma,
-                                              pool=pool,
-                                              verbose=True)
+            LipConvNet = train.LBENLipConvNetV2(sp.MONForwardBackwardSplitting,
+                                                in_dim=in_dim,
+                                                in_channels=in_channels,
+                                                out_channels=width,
+                                                alpha=alpha,
+                                                max_iter=max_iter,
+                                                metric=metric,
+                                                tol=tol,
+                                                m=m,
+                                                gamma=gamma,
+                                                pool=pool,
+                                                verbose=False)
 
             train_res, val_res = train.train(trainLoader, testLoader,
                                              LipConvNet,
@@ -141,7 +142,7 @@ if __name__ == "__main__":
                                              max_alpha=max_alpha,
                                              warmstart=False)
 
-            name = 'lben_conv_w{:d}_L{:1.1f}'.format(width, gamma)
+            name = metric + '_conv_w{:d}_L{:1.1f}'.format(width, gamma)
             torch.save(LipConvNet.state_dict(), path + name + '.params')
 
             LipConvNet.mon.tol = 1E-4
