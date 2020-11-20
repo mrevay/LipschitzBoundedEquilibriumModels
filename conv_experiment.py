@@ -15,7 +15,7 @@ import splitting as sp
 if __name__ == "__main__":
     torch.set_default_tensor_type(torch.DoubleTensor)
 
-    dataset = "mnist"
+    dataset = "cifar"
     if dataset == "mnist":
         trainLoader, testLoader = train.mnist_loaders(train_batch_size=200,
                                                       test_batch_size=200)
@@ -53,14 +53,15 @@ if __name__ == "__main__":
 
     # Choose between full, Identity, Channel, Image
     metric = "full"
-    alpha = 0.25
-    epochs = 10
+    alpha = 0.5
+    max_alpha = 0.5
+    epochs = 25
     seed = 1
     tol = 1E-2
     # width = 81
-    width = 21
-    lr_decay_steps = 25
-    max_iter = 500
+    width = 81
+    lr_decay_steps = 15
+    max_iter = 250
     # m = 0.1
     m = 1.0
 
@@ -138,7 +139,7 @@ if __name__ == "__main__":
     # Lipschitz network
     # for gamma in [30.0, 10, 8.0, 5.0, 3.0, 0.8, 0.5, 0.3, 0.2]:
 
-    for gamma in [2.0]:
+    for gamma in [5.0, 3.0]:
 
         torch.manual_seed(seed)
         numpy.random.seed(seed)
@@ -153,7 +154,7 @@ if __name__ == "__main__":
                                           m=m,
                                           gamma=gamma,
                                           pool=pool,
-                                          verbose=False)
+                                          verbose=True)
 
         train_res, val_res = train.train(trainLoader, testLoader,
                                          LipConvNet,
@@ -164,15 +165,16 @@ if __name__ == "__main__":
                                          epochs=epochs,
                                          print_freq=100,
                                          tune_alpha=True,
+                                         max_alpha=max_alpha,
                                          warmstart=False)
 
         name = 'lben_conv_w{:d}_L{:1.1f}'.format(width, gamma)
-        # torch.save(LipConvNet.state_dict(), path + name + '.params')
+        torch.save(LipConvNet.state_dict(), path + name + '.params')
 
         LipConvNet.mon.tol = 1E-4
         res = train.test_robustness(LipConvNet, testLoader, data_stats)
         res["train"] = train_res
         res["val"] = val_res
-        # io.savemat(path + name + ".mat", res)
+        io.savemat(path + name + ".mat", res)
 
         print("fin")

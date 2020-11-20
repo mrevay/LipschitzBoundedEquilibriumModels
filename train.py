@@ -250,10 +250,13 @@ def cifar_loaders(train_batch_size, test_batch_size=None, augment=True):
         transforms_list = [transforms.RandomHorizontalFlip(),
                            transforms.RandomCrop(32, 4),
                            transforms.ToTensor(),
-                           normalize]
+                           normalize,
+                           transforms.Lambda(lambda x: x.double())]
     else:
         transforms_list = [transforms.ToTensor(),
-                           normalize]
+                           normalize,
+                           transforms.Lambda(lambda x: x.double())]
+
     train_dset = dset.CIFAR10('data',
                               train=True,
                               download=True,
@@ -262,7 +265,8 @@ def cifar_loaders(train_batch_size, test_batch_size=None, augment=True):
                              train=False,
                              transform=transforms.Compose([
                                  transforms.ToTensor(),
-                                 normalize
+                                 normalize,
+                                 transforms.Lambda(lambda x: x.double())
                              ]))
 
     trainLoader = torch.utils.data.DataLoader(train_dset, batch_size=train_batch_size,
