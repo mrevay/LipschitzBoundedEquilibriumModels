@@ -643,7 +643,7 @@ class LBENLipConvNetV2(nn.Module):
 
         linear_module = lben.LBEN_Lip_Conv_V2(
             in_channels, out_channels,  self.out_dim, gamma,
-            shp, m=m, pool=self.pool)
+            shp, m=m, pool=self.pool, metric=metric)
 
         # linear_module = NODEN.LBENLipConv(
         #     in_channels, out_channels,  self.out_dim,

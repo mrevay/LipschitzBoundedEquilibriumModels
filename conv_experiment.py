@@ -71,7 +71,7 @@ if __name__ == "__main__":
     path = './models/conv_experiment_v2/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    for metric in ["full", "identity", "channels", "image"]:
+    for metric in ["identity", "channels", "image"]:
 
         torch.manual_seed(seed)
         numpy.random.seed(seed)
