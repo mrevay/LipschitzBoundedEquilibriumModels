@@ -114,7 +114,7 @@ if __name__ == "__main__":
         # io.savemat(path + name + ".mat", res)
 
         # for gamma in [5.0, 3.0, 1.0]:
-        for gamma in [50.0, 3.0, 1.0]:
+        for gamma in [2.0, 5.0, 8.0]:
             alpha = 1.0
             max_alpha = 1.0
 
