@@ -63,8 +63,8 @@ if __name__ == "__main__":
     tol = 1E-2
     width = 81
     lr_decay_steps = 15
-    max_iter = 100
-    m = 0.0001
+    max_iter = 200
+    m = 1E-3
 
     path = './models/conv_experiment_v4/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -114,9 +114,9 @@ if __name__ == "__main__":
 
         # for gamma in [5.0, 3.0, 1.0]:
 
-        for gamma in [5.0, 3.0, 1.0]:
-            alpha = 0.125
-            max_alpha = alpha
+        for gamma in [3.0]:
+            alpha = 0.25
+            max_alpha = 1.0
 
             torch.manual_seed(seed)
             numpy.random.seed(seed)
@@ -128,7 +128,7 @@ if __name__ == "__main__":
                                                 alpha=alpha,
                                                 max_iter=max_iter,
                                                 metric=metric,
-                                                init="identity",
+                                                init="default",
                                                 tol=tol,
                                                 m=m,
                                                 gamma=gamma,
