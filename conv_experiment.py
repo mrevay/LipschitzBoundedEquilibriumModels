@@ -66,7 +66,7 @@ if __name__ == "__main__":
     max_iter = 100
     m = 0.0001
 
-    path = './models/conv_experiment_v3/'
+    path = './models/conv_experiment_v4/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     for metric in ["full", "identity"]:
