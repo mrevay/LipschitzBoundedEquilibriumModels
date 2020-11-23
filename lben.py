@@ -144,16 +144,22 @@ class LBEN_Lip_FC(nn.Module):
 class LBEN_Conv(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
 
-    def __init__(self, in_dim, in_channels, out_channels, shp, kernel_size=3, m=1.0, metric="full"):
+    def __init__(self, in_dim, in_channels, out_channels, shp, kernel_size=3, m=1.0, metric="full", init="default"):
         super().__init__()
         self.U = nn.Conv2d(in_channels, out_channels, kernel_size)
+
         self.A = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
-        self.g = nn.Parameter(torch.tensor(1.))
+
+        self.g = nn.Parameter(torch.tensor(1.0 * out_channels))
         self.h = nn.Parameter(torch.tensor(1.))
         self.B = nn.Conv2d(out_channels, out_channels, kernel_size, bias=False)
         self.pad = 4 * ((kernel_size - 1) // 2,)
         self.shp = shp
         self.m = m
+
+        if init == "identity":
+            torch.nn.init.dirac_(self.A.weight)
+            self.g.data = torch.tensor(1.0 * out_channels)
 
         self.metric = metric
         if metric == "full":
@@ -202,6 +208,7 @@ class LBEN_Conv(nn.Module):
             Psi = torch.exp(self.psi)
 
         A = self.A.weight / self.A.weight.view(-1).norm()
+        # A = self.A.weight
         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
 
         Az = F.conv2d(self.cpad(z[0]), A)
@@ -221,6 +228,7 @@ class LBEN_Conv(nn.Module):
 
         PsiG = Psi * g[0]
         A = self.A.weight / self.A.weight.view(-1).norm()
+        # A = self.A.weight
         B = self.h * self.B.weight / self.B.weight.view(-1).norm()
 
         Ag = F.conv2d(self.cpad(PsiG), A)
@@ -424,13 +432,15 @@ class LBEN_Lip_Conv(nn.Module):
 class LBEN_Lip_Conv_V2(nn.Module):
     """ MON class with a single 3x3 (circular) convolution """
 
-    def __init__(self, in_channels, channels, out_dim, gamma, shp, metric="full", kernel_size=3, m=1.0, pool=4):
+    def __init__(self, in_channels, channels, out_dim, gamma, shp, metric="full", init="default", kernel_size=3, m=1.0, pool=4):
         super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = channels
 
         self.U = nn.Conv2d(in_channels, channels, kernel_size)
+        # self.U.weight.data = torch.zeros_like(self.U.weight)
+
         self.A = nn.Conv2d(channels, channels, kernel_size, bias=False)
         self.B = nn.Conv2d(channels, channels, kernel_size, bias=False)
 
@@ -445,10 +455,18 @@ class LBEN_Lip_Conv_V2(nn.Module):
         n = shp[0]
         self.out_dim = channels * (n // pool) ** 2
         self.Wout = nn.Linear(self.out_dim, 10)
+        # self.Wout.weight.data = torch.zeros_like(self.Wout.weight)
 
         self.pad = 4 * ((kernel_size - 1) // 2,)
         self.shp = shp
         self.m = m
+
+        if init == "identity":
+            # Initialize as identity mapping
+            torch.nn.init.dirac_(self.A.weight)
+            self.a.data = torch.tensor(1.0 * channels)
+            self.g.data = torch.tensor(0.01)
+            self.u.data = torch.tensor(0.01)
 
         self.metric = metric
         if metric == "full":

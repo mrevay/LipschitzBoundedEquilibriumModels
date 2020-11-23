@@ -420,14 +420,14 @@ class NODENFcNet_uncon(nn.Module):
 
 class LBENConvNet(nn.Module):
 
-    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, metric="full", ** kwargs):
+    def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, metric="full", init="default", ** kwargs):
         super().__init__()
         n = in_dim + 2
         shp = (n, n)
         self.pool = pool
         self.out_dim = out_channels * (n // self.pool) ** 2
         linear_module = lben.LBEN_Conv(
-            in_dim, in_channels, out_channels, shp, m=m, metric=metric)
+            in_dim, in_channels, out_channels, shp, m=m, metric=metric, init=init)
 
         nonlin_module = mon.MONBorderReLU(linear_module.pad[0])
         self.mon = splittingMethod(
@@ -630,7 +630,7 @@ class LBENLipConvNet(nn.Module):
 
 class LBENLipConvNetV2(nn.Module):
 
-    def __init__(self, splittingMethod, gamma,  metric="full", in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
+    def __init__(self, splittingMethod, gamma,  metric="full", init="default", in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=1, **kwargs):
         super().__init__()
         self.unpadded_size = in_dim
         self.in_channels = in_channels
@@ -643,7 +643,7 @@ class LBENLipConvNetV2(nn.Module):
 
         linear_module = lben.LBEN_Lip_Conv_V2(
             in_channels, out_channels,  self.out_dim, gamma,
-            shp, m=m, pool=self.pool, metric=metric)
+            shp, m=m, pool=self.pool, metric=metric, init=init)
 
         # linear_module = NODEN.LBENLipConv(
         #     in_channels, out_channels,  self.out_dim,
