@@ -58,27 +58,25 @@ if __name__ == "__main__":
                       "std": (0.1980, 0.2010, 0.1970)}
 
     # Choose between full, Identity, Channel, Image
-    alpha = 1.0
-    max_alpha = 1.0
     epochs = 25
     seed = 1
     tol = 1E-2
     width = 81
     lr_decay_steps = 15
     max_iter = 100
-    m = 0.1
+    m = 0.0001
 
     path = './models/conv_experiment_v3/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    for metric in ["identity", "full"]:
-        # alpha = 1.0
-        # max_alpha = 1.0
+    for metric in ["full", "identity"]:
+        # alpha = 0.25
+        # max_alpha = alpha
 
-        # torch.manual_seed(seed)
-        # numpy.random.seed(seed)
+        # # torch.manual_seed(seed)
+        # # numpy.random.seed(seed)
 
-        # # # # Train and test Single layer convolutional LBEN
+        # # # # # Train and test Single layer convolutional LBEN
         # LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
         #                                 in_dim=in_dim,
         #                                 in_channels=in_channels,
@@ -86,10 +84,11 @@ if __name__ == "__main__":
         #                                 alpha=alpha,
         #                                 max_iter=max_iter,
         #                                 metric=metric,
+        #                                 init="identity",
         #                                 tol=tol,
         #                                 m=m,
         #                                 pool=pool,
-        #                                 verbose=False)
+        #                                 verbose=True)
 
         # train_res, val_res = train.train(trainLoader, testLoader,
         #                                  LbenConvNet,
@@ -114,9 +113,9 @@ if __name__ == "__main__":
         # io.savemat(path + name + ".mat", res)
 
         # for gamma in [5.0, 3.0, 1.0]:
-        for gamma in [50.0, 3.0, 1.0]:
-            alpha = 1.0
-            max_alpha = 1.0
+        for gamma in [5.0, 3.0, 1.0]:
+            alpha = 0.125
+            max_alpha = alpha
 
             torch.manual_seed(seed)
             numpy.random.seed(seed)
@@ -128,11 +127,12 @@ if __name__ == "__main__":
                                                 alpha=alpha,
                                                 max_iter=max_iter,
                                                 metric=metric,
+                                                init="identity",
                                                 tol=tol,
                                                 m=m,
                                                 gamma=gamma,
                                                 pool=pool,
-                                                verbose=False)
+                                                verbose=True)
 
             train_res, val_res = train.train(trainLoader, testLoader,
                                              LipConvNet,
