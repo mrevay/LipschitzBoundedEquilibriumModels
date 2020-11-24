@@ -63,7 +63,8 @@ if __name__ == "__main__":
     tol = 1E-2
     width = 81
     lr_decay_steps = 15
-    max_iter = 100
+
+    max_iter = 200
     m = 0.1
 
     path = './models/conv_experiment_v3/'
@@ -139,47 +140,46 @@ if __name__ == "__main__":
         io.savemat(path + name + ".mat", res)
 
         # for gamma in [5.0, 3.0, 1.0]:
+        for gamma in [3.0]:
+            alpha = 0.25
+            max_alpha = 1.0
 
-        # for gamma in [5.0, 3.0, 1.0]:
-        #     alpha = 0.125
-        #     max_alpha = alpha
+            torch.manual_seed(seed)
+            numpy.random.seed(seed)
 
-        #     torch.manual_seed(seed)
-        #     numpy.random.seed(seed)
+            LipConvNet = train.LBENLipConvNetV2(sp.MONForwardBackwardSplitting,
+                                                in_dim=in_dim,
+                                                in_channels=in_channels,
+                                                out_channels=width,
+                                                alpha=alpha,
+                                                max_iter=max_iter,
+                                                metric=metric,
+                                                init="default",
+                                                tol=tol,
+                                                m=m,
+                                                gamma=gamma,
+                                                pool=pool,
+                                                verbose=True)
 
-        #     LipConvNet = train.LBENLipConvNetV2(sp.FISTA,
-        #                                         in_dim=in_dim,
-        #                                         in_channels=in_channels,
-        #                                         out_channels=width,
-        #                                         alpha=alpha,
-        #                                         max_iter=max_iter,
-        #                                         metric=metric,
-        #                                         init="identity",
-        #                                         tol=tol,
-        #                                         m=m,
-        #                                         gamma=gamma,
-        #                                         pool=pool,
-        #                                         verbose=True)
+            train_res, val_res = train.train(trainLoader, testLoader,
+                                             LipConvNet,
+                                             max_lr=1e-3,
+                                             lr_mode='step',
+                                             step=lr_decay_steps,
+                                             change_mo=False,
+                                             epochs=epochs,
+                                             print_freq=100,
+                                             tune_alpha=True,
+                                             max_alpha=max_alpha,
+                                             warmstart=False)
 
-        #     train_res, val_res = train.train(trainLoader, testLoader,
-        #                                      LipConvNet,
-        #                                      max_lr=1e-3,
-        #                                      lr_mode='step',
-        #                                      step=lr_decay_steps,
-        #                                      change_mo=False,
-        #                                      epochs=epochs,
-        #                                      print_freq=100,
-        #                                      tune_alpha=True,
-        #                                      max_alpha=max_alpha,
-        #                                      warmstart=False)
+            name = metric + '_conv_w{:d}_L{:1.1f}'.format(width, gamma)
+            torch.save(LipConvNet.state_dict(), path + name + '.params')
 
-        #     name = metric + '_conv_w{:d}_L{:1.1f}'.format(width, gamma)
-        #     torch.save(LipConvNet.state_dict(), path + name + '.params')
+            LipConvNet.mon.tol = 1E-4
+            res = train.test_robustness(LipConvNet, testLoader, data_stats)
+            res["train"] = train_res
+            res["val"] = val_res
+            io.savemat(path + name + ".mat", res)
 
-        #     LipConvNet.mon.tol = 1E-4
-        #     res = train.test_robustness(LipConvNet, testLoader, data_stats)
-        #     res["train"] = train_res
-        #     res["val"] = val_res
-        #     io.savemat(path + name + ".mat", res)
-
-        #     print("fin")
+            print("fin")

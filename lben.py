@@ -465,8 +465,13 @@ class LBEN_Lip_Conv_V2(nn.Module):
             # Initialize as identity mapping
             torch.nn.init.dirac_(self.A.weight)
             self.a.data = torch.tensor(1.0 * channels)
-            self.g.data = torch.tensor(0.01)
-            self.u.data = torch.tensor(0.01)
+            self.g.data = torch.tensor(1.)
+            self.u.data = torch.tensor(1.)
+
+        if init == "offset":
+            old_A = self.A.weight.clone()
+            torch.nn.init.dirac_(self.A.weight)
+            self.A.weight.data += 0.05 * old_A
 
         self.metric = metric
         if metric == "full":
