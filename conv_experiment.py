@@ -14,7 +14,7 @@ import splitting as sp
 
 if __name__ == "__main__":
 
-    use_double = True
+    use_double = False
     dataset = "cifar"
 
     if use_double:
@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     elif dataset == "cifar":
         trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
-                                                      test_batch_size=250,
+                                                      test_batch_size=1000,
                                                       augment=False,
                                                       use_double=use_double)
 
@@ -64,96 +64,122 @@ if __name__ == "__main__":
     width = 81
     lr_decay_steps = 15
     max_iter = 100
-    m = 0.0001
+    m = 0.1
 
     path = './models/conv_experiment_v3/'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+    # Train FF convolutional network
+    FFConvNet = train.FFConvNet(in_dim=in_dim,
+                                in_channels=in_channels,
+                                out_channels=width,
+                                pool=pool)
+
+    train_res, val_res = train.train(trainLoader, testLoader,
+                                     FFConvNet,
+                                     max_lr=1e-3,
+                                     lr_mode='step',
+                                     step=lr_decay_steps,
+                                     change_mo=False,
+                                     epochs=epochs,
+                                     print_freq=100,
+                                     tune_alpha=False,
+                                     warmstart=False)
+
+    name = 'ff_conv_w{:d}'.format(width)
+    torch.save(FFConvNet.state_dict(), path + name + '.params')
+
+    res = train.test_robustness(FFConvNet, testLoader, data_stats)
+    res["train"] = train_res
+    res["val"] = val_res
+
+    io.savemat(path + name + ".mat", res)
+
     for metric in ["full", "identity"]:
-        # alpha = 0.25
-        # max_alpha = alpha
+        alpha = 0.125
+        max_alpha = 0.25
 
-        # # torch.manual_seed(seed)
-        # # numpy.random.seed(seed)
+        torch.manual_seed(seed)
+        numpy.random.seed(seed)
 
-        # # # # # Train and test Single layer convolutional LBEN
-        # LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
-        #                                 in_dim=in_dim,
-        #                                 in_channels=in_channels,
-        #                                 out_channels=width,
-        #                                 alpha=alpha,
-        #                                 max_iter=max_iter,
-        #                                 metric=metric,
-        #                                 init="identity",
-        #                                 tol=tol,
-        #                                 m=m,
-        #                                 pool=pool,
-        #                                 verbose=True)
+        # # # # Train and test Single layer convolutional LBEN
+        LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
+                                        in_dim=in_dim,
+                                        in_channels=in_channels,
+                                        out_channels=width,
+                                        alpha=alpha,
+                                        max_iter=max_iter,
+                                        metric=metric,
+                                        init="identity",
+                                        tol=tol,
+                                        m=m,
+                                        pool=pool,
+                                        verbose=False)
 
-        # train_res, val_res = train.train(trainLoader, testLoader,
-        #                                  LbenConvNet,
-        #                                  max_lr=1e-3,
-        #                                  lr_mode='step',
-        #                                  step=lr_decay_steps,
-        #                                  change_mo=False,
-        #                                  epochs=epochs,
-        #                                  print_freq=100,
-        #                                  tune_alpha=True,
-        #                                  max_alpha=max_alpha,
-        #                                  warmstart=False)
+        train_res, val_res = train.train(trainLoader, testLoader,
+                                         LbenConvNet,
+                                         max_lr=1e-3,
+                                         lr_mode='step',
+                                         step=lr_decay_steps,
+                                         change_mo=False,
+                                         epochs=epochs,
+                                         print_freq=100,
+                                         tune_alpha=True,
+                                         max_alpha=max_alpha,
+                                         warmstart=False)
 
-        # name = metric + '_conv_w{:d}'.format(width)
-        # torch.save(LbenConvNet.state_dict(), path + name + '.params')
+        name = metric + '_conv_w{:d}'.format(width)
+        torch.save(LbenConvNet.state_dict(), path + name + '.params')
 
-        # LbenConvNet.mon.tol = 1E-3
-        # res = train.test_robustness(LbenConvNet, testLoader, data_stats)
-        # res["train"] = train_res
-        # res["val"] = val_res
+        LbenConvNet.mon.tol = 1E-3
+        res = train.test_robustness(LbenConvNet, testLoader, data_stats)
+        res["train"] = train_res
+        res["val"] = val_res
 
-        # io.savemat(path + name + ".mat", res)
+        io.savemat(path + name + ".mat", res)
 
         # for gamma in [5.0, 3.0, 1.0]:
 
-        for gamma in [5.0, 3.0, 1.0]:
-            alpha = 0.125
-            max_alpha = alpha
+        # for gamma in [5.0, 3.0, 1.0]:
+        #     alpha = 0.125
+        #     max_alpha = alpha
 
-            torch.manual_seed(seed)
-            numpy.random.seed(seed)
+        #     torch.manual_seed(seed)
+        #     numpy.random.seed(seed)
 
-            LipConvNet = train.LBENLipConvNetV2(sp.MONForwardBackwardSplitting,
-                                                in_dim=in_dim,
-                                                in_channels=in_channels,
-                                                out_channels=width,
-                                                alpha=alpha,
-                                                max_iter=max_iter,
-                                                metric=metric,
-                                                init="identity",
-                                                tol=tol,
-                                                m=m,
-                                                gamma=gamma,
-                                                pool=pool,
-                                                verbose=True)
+        #     LipConvNet = train.LBENLipConvNetV2(sp.FISTA,
+        #                                         in_dim=in_dim,
+        #                                         in_channels=in_channels,
+        #                                         out_channels=width,
+        #                                         alpha=alpha,
+        #                                         max_iter=max_iter,
+        #                                         metric=metric,
+        #                                         init="identity",
+        #                                         tol=tol,
+        #                                         m=m,
+        #                                         gamma=gamma,
+        #                                         pool=pool,
+        #                                         verbose=True)
 
-            train_res, val_res = train.train(trainLoader, testLoader,
-                                             LipConvNet,
-                                             max_lr=1e-3,
-                                             lr_mode='step',
-                                             step=lr_decay_steps,
-                                             change_mo=False,
-                                             epochs=epochs,
-                                             print_freq=100,
-                                             tune_alpha=True,
-                                             max_alpha=max_alpha,
-                                             warmstart=False)
+        #     train_res, val_res = train.train(trainLoader, testLoader,
+        #                                      LipConvNet,
+        #                                      max_lr=1e-3,
+        #                                      lr_mode='step',
+        #                                      step=lr_decay_steps,
+        #                                      change_mo=False,
+        #                                      epochs=epochs,
+        #                                      print_freq=100,
+        #                                      tune_alpha=True,
+        #                                      max_alpha=max_alpha,
+        #                                      warmstart=False)
 
-            name = metric + '_conv_w{:d}_L{:1.1f}'.format(width, gamma)
-            torch.save(LipConvNet.state_dict(), path + name + '.params')
+        #     name = metric + '_conv_w{:d}_L{:1.1f}'.format(width, gamma)
+        #     torch.save(LipConvNet.state_dict(), path + name + '.params')
 
-            LipConvNet.mon.tol = 1E-4
-            res = train.test_robustness(LipConvNet, testLoader, data_stats)
-            res["train"] = train_res
-            res["val"] = val_res
-            io.savemat(path + name + ".mat", res)
+        #     LipConvNet.mon.tol = 1E-4
+        #     res = train.test_robustness(LipConvNet, testLoader, data_stats)
+        #     res["train"] = train_res
+        #     res["val"] = val_res
+        #     io.savemat(path + name + ".mat", res)
 
-            print("fin")
+        #     print("fin")
