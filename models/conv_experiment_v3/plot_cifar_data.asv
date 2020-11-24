@@ -8,7 +8,18 @@ set(groot, 'defaultLegendInterpreter','latex');
 set(0,'defaultTextInterpreter','latex');
 set(0,'defaultAxesFontSize',28)
 set(0, 'DefaultLineLineWidth', 1.5);
+
+c1 = [0, 0.4470, 0.7410];
+c2 = [0.8500, 0.3250, 0.0980];
+c3 = [0.9290, 0.6940, 0.1250];
+c4 = [0.4940, 0.1840, 0.5560];
+c5 = [0.4660, 0.6740, 0.1880];
+c6 = [0.3010, 0.7450, 0.9330];
+c7 = [0.6350,    0.0780,    0.1840];
+
 %%
+
+ff = load('./ff_conv_w81.mat')
 
 % Compare mon and lben for different bounds
 i50 = load('./identity_conv_w81_L50.0.mat')
@@ -27,32 +38,43 @@ f1 = load('./full_conv_w81_L1.0.mat')
 f0 = load('./full_conv_w81.mat')
 
 %% 
-figure 
-hold on
-plot(f0.Lipschitz, f0.nominal, 'x', 'LineWidth', 4);
-plot(f50.Lipschitz, f50.nominal, 'x', 'LineWidth', 4);
-plot(f5.Lipschitz, f5.nominal, 'x', 'LineWidth', 4);
-plot(f3.Lipschitz, f3.nominal, 'x', 'LineWidth', 4);
-plot(f2.Lipschitz, f2.nominal, 'x', 'LineWidth', 4);
-plot(f1.Lipschitz, f1.nominal, 'x', 'LineWidth', 4);
+fig_pos = [232 346 840 700];
 
-plot(i0.Lipschitz, i0.nominal,'o', 'LineWidth', 4);
-plot(i50.Lipschitz, i50.nominal, 'o', 'LineWidth', 4);
-% plot(i8.Lipschitz, i8.nominal, 'o', 'LineWidth', 4);
-plot(i5.Lipschitz, i5.nominal, 'o', 'LineWidth', 4);
-plot(i3.Lipschitz, i3.nominal, 'o', 'LineWidth', 4);
-plot(i2.Lipschitz, i2.nominal, 'o', 'LineWidth', 4);
-plot(i1.Lipschitz, i1.nominal, 'o', 'LineWidth', 4);
+fig = figure('Position', fig_pos)
+fig.PaperPositionMode = 'auto';
+fig.PaperOrientation = 'landscape';
+hold on
+grid on
+box on
+
+
+
+p1 = plot(f0.Lipschitz, f0.nominal, 'x', 'LineWidth', 4, 'color', c1);
+plot(f50.Lipschitz, f50.nominal, 'x', 'LineWidth', 4, 'color', c1);
+plot(f5.Lipschitz, f5.nominal, 'x', 'LineWidth', 4, 'color', c1);
+plot(f3.Lipschitz, f3.nominal, 'x', 'LineWidth', 4, 'color', c1);
+plot(f2.Lipschitz, f2.nominal, 'x', 'LineWidth', 4, 'color', c1);
+plot(f1.Lipschitz, f1.nominal, 'x', 'LineWidth', 4, 'color', c1);
+
+p2 = plot(i0.Lipschitz, i0.nominal,'o', 'LineWidth', 4, 'color', c2);
+plot(i50.Lipschitz, i50.nominal, 'o', 'LineWidth', 4, 'color', c2);
+plot(i5.Lipschitz, i5.nominal, 'o', 'LineWidth', 4, 'color', c2);
+plot(i3.Lipschitz, i3.nominal, 'o', 'LineWidth', 4, 'color', c2);
+plot(i2.Lipschitz, i2.nominal, 'o', 'LineWidth', 4, 'color', c2);
+plot(i1.Lipschitz, i1.nominal, 'o', 'LineWidth', 4, 'color', c2);
+
+p3 = plot(ff.Lipschitz, ff.nominal, 's', 'LineWidth', 4, 'color', c4);
 
 ax = gca
 ax.XScale = 'log'
 ax.YScale = 'log'
 
-xlabel('Lipschitz Constant')
-ylabel('Test Performance')
+legend([p1, p2, p3], {"LBEN", 'MON', 'Feedforward'})
 
-grid on 
-box on
+xlabel('Lipschitz (lower bound)', 'Interpreter', 'Latex')
+ylabel('Test Performance', 'Interpreter', 'Latex')
+
+print(fig, '-dpdf', 'mon_vs_lben', '-bestfit');
 
 
 %% Plot showing respresentational power for the two models
@@ -63,7 +85,7 @@ ydata1 = [f1.nominal, f2.nominal, f3.nominal, f5.nominal, f50.nominal, f0.nomina
 ydata2 = [i1.nominal, i2.nominal, i3.nominal, i5.nominal, i50.nominal, i0.nominal];
 
 
-fig_pos = [-0 -0 1200 900];
+fig_pos = [232 346 840 700];
 
 fig = figure('Position', fig_pos)
 fig.PaperPositionMode = 'auto';
@@ -73,6 +95,7 @@ grid on
 box on
 plot(xdata1, ydata1,  'LineWidth', 2.0)
 plot(xdata2, ydata2,  'LineWidth', 2.0)
+legend({'LBEN', 'MON'}, 'Location', 'NorthEast')
 
 ax = gca
 ax.XScale = 'log'
@@ -81,7 +104,7 @@ ax.YScale = 'log'
 xlabel('Lipschitz (lower bound)', 'Interpreter', 'Latex')
 ylabel('Test Performance', 'Interpreter', 'Latex')
 
-legend(['Non-Euclidean', 'Non-Euclidean'], 'Location', '')
+print(fig, '-dpdf', 'mon_vs_lben', '-bestfit');
 
 %% Plot Training and Validaiton Curves for f0 and i0
 % figure 
@@ -151,3 +174,50 @@ xlabel('$\ell_2$ perturbation', 'Interpreter', 'Latex')
 ylabel('Test Error', 'Interpreter', 'Latex')
 
 print(fig, '-dpdf', 'cifar_robustness', '-bestfit');
+
+
+%% Plot Training Curves
+f0 = load('./old_with_training_curves/full_conv_w81.mat')
+f1 = load('./old_with_training_curves/full_conv_w81_L1.0.mat')
+f3 = load('./old_with_training_curves/full_conv_w81_L3.0.mat')
+f5 = load('./old_with_training_curves/full_conv_w81_L5.0.mat')
+f50 = load('./old_with_training_curves/full_conv_w81_L50.0.mat')
+
+i0 = load('./old_with_training_curves/identity_conv_w81.mat')
+i1 = load('./old_with_training_curves/identity_conv_w81_L1.0.mat')
+i3 = load('./old_with_training_curves/identity_conv_w81_L3.0.mat')
+i5 = load('./old_with_training_curves/identity_conv_w81_L5.0.mat')
+i50 = load('./old_with_training_curves/identity_conv_w81_L50.0.mat')
+
+fig_pos = [-0 -0 1200 900];
+fig = figure('Position', fig_pos)
+fig.PaperPositionMode = 'auto';
+fig.PaperOrientation = 'landscape';
+hold on
+grid on
+box on
+
+
+plot(i1.train, '--','LineWidth', 2.0, 'color', c2)
+plot(i5.train, '-.','LineWidth', 2.0, 'color', c2)
+plot(i50.train, 'LineWidth', 2.0, 'color', c2)
+plot(i0.train, 'LineWidth', 2.0, 'color', c2)
+
+plot(f1.train, '--', 'LineWidth', 2.0, 'color', c1)
+plot(f5.train, '-.', 'LineWidth', 2.0, 'color', c1)
+plot(f50.train, 'LineWidth', 2.0, 'color', c1)
+
+plot(f0.train, 'LineWidth', 2.0, 'color', c1)
+
+
+legend(["LBEN$_{\Lambda=I, \gamma=1.0}$",...
+        "LBEN $_{\gamma=1.0}$", ...
+        "MON $_{\Lambda=I, \gamma=5.0}$",...
+        "LBEN $_{\gamma=5.0}$", ...
+        "MON $_{\Lambda=I, \gamma=50.0}$",.. "LBEN $_{\gamma=50.0}$"], ...
+        'Location', "NorthEast", 'Interpreter', 'Latex')
+    
+xlabel('Epochs', 'Interpreter', 'Latex')
+ylabel('Training Error', 'Interpreter', 'Latex')
+
+print(fig, '-dpdf', 'cifar_training', '-bestfit');

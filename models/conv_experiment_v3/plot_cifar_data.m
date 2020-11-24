@@ -47,26 +47,31 @@ hold on
 grid on
 box on
 
+ms = 3
 
-p1 = plot(ff.Lipschitz, ff.nominal, 's', 'LineWidth', 4, 'color', c4);
+p1 = plot(f0.Lipschitz, f0.nominal, 'x', 'LineWidth', ms, 'color', c1);
+plot(f50.Lipschitz, f50.nominal, 'x', 'LineWidth', ms, 'color', c1);
+plot(f5.Lipschitz, f5.nominal, 'x', 'LineWidth', ms, 'color', c1);
+plot(f3.Lipschitz, f3.nominal, 'x', 'LineWidth', ms, 'color', c1);
+plot(f2.Lipschitz, f2.nominal, 'x', 'LineWidth', ms, 'color', c1);
+plot(f1.Lipschitz, f1.nominal, 'x', 'LineWidth', ms, 'color', c1);
 
-p2 = plot(f0.Lipschitz, f0.nominal, 'x', 'LineWidth', 4, 'color', c1);
-plot(f50.Lipschitz, f50.nominal, 'x', 'LineWidth', 4, 'color', c1);
-plot(f5.Lipschitz, f5.nominal, 'x', 'LineWidth', 4, 'color', c1);
-plot(f3.Lipschitz, f3.nominal, 'x', 'LineWidth', 4, 'color', c1);
-plot(f2.Lipschitz, f2.nominal, 'x', 'LineWidth', 4, 'color', c1);
-plot(f1.Lipschitz, f1.nominal, 'x', 'LineWidth', 4, 'color', c1);
 
-p3 = plot(i0.Lipschitz, i0.nominal,'o', 'LineWidth', 4, 'color', c2);
-plot(i50.Lipschitz, i50.nominal, 'o', 'LineWidth', 4, 'color', c2);
-plot(i5.Lipschitz, i5.nominal, 'o', 'LineWidth', 4, 'color', c2);
-plot(i3.Lipschitz, i3.nominal, 'o', 'LineWidth', 4, 'color', c2);
-plot(i2.Lipschitz, i2.nominal, 'o', 'LineWidth', 4, 'color', c2);
-plot(i1.Lipschitz, i1.nominal, 'o', 'LineWidth', 4, 'color', c2);
+p2 = plot(i50.Lipschitz, i50.nominal, 'o', 'LineWidth', ms, 'color', c2);
+plot(i5.Lipschitz, i5.nominal, 'o', 'LineWidth', ms, 'color', c2);
+plot(i3.Lipschitz, i3.nominal, 'o', 'LineWidth', ms, 'color', c2);
+plot(i2.Lipschitz, i2.nominal, 'o', 'LineWidth', ms, 'color', c2);
+plot(i1.Lipschitz, i1.nominal, 'o', 'LineWidth', ms, 'color', c2);
+
+p3 = plot(i0.Lipschitz, i0.nominal,'^', 'LineWidth', ms, 'color', c5);
+
+p4 = plot(ff.Lipschitz, ff.nominal, 's', 'LineWidth', ms, 'color', c4);
 
 ax = gca
 ax.XScale = 'log'
 ax.YScale = 'log'
+
+legend([p1, p2, p3, p4], {"LBEN", 'LBEN $_{\Lambda=I}$', 'MON', 'Feedforward'})
 
 xlabel('Lipschitz (lower bound)', 'Interpreter', 'Latex')
 ylabel('Test Performance', 'Interpreter', 'Latex')
@@ -171,3 +176,55 @@ xlabel('$\ell_2$ perturbation', 'Interpreter', 'Latex')
 ylabel('Test Error', 'Interpreter', 'Latex')
 
 print(fig, '-dpdf', 'cifar_robustness', '-bestfit');
+
+
+%% Plot Training Curves
+f0 = load('./old_with_training_curves/full_conv_w81.mat')
+f1 = load('./old_with_training_curves/full_conv_w81_L1.0.mat')
+f3 = load('./old_with_training_curves/full_conv_w81_L3.0.mat')
+f5 = load('./old_with_training_curves/full_conv_w81_L5.0.mat')
+f50 = load('./old_with_training_curves/full_conv_w81_L50.0.mat')
+
+i0 = load('./old_with_training_curves/identity_conv_w81.mat')
+i1 = load('./old_with_training_curves/identity_conv_w81_L1.0.mat')
+i3 = load('./old_with_training_curves/identity_conv_w81_L3.0.mat')
+i5 = load('./old_with_training_curves/identity_conv_w81_L5.0.mat')
+i50 = load('./old_with_training_curves/identity_conv_w81_L50.0.mat')
+
+fig_pos = [-0 -0 1200 900];
+fig = figure('Position', fig_pos)
+fig.PaperPositionMode = 'auto';
+fig.PaperOrientation = 'landscape';
+hold on
+grid on
+box on
+
+
+plot(i1.train, '--','LineWidth', 2.0, 'color', c2)
+plot(i5.train, '-.','LineWidth', 2.0, 'color', c2)
+plot(i50.train, 'LineWidth', 2.0, 'color', c2)
+
+plot(f1.train, '--', 'LineWidth', 2.0, 'color', c1)
+plot(f5.train, '-.', 'LineWidth', 2.0, 'color', c1)
+plot(f50.train, 'LineWidth', 2.0, 'color', c1)
+
+plot(f0.train, ':', 'LineWidth', 2.0, 'color', c1)
+plot(i0.train, ':', 'LineWidth', 2.0, 'color', c2)
+
+
+legend(["LBEN $_{\gamma=1.0, ~\Lambda=I}$",...
+        "LBEN $_{\gamma=5.0, ~\Lambda=I}$",...
+        "LBEN $_{\gamma=50.0, ~\Lambda=I}$",...
+        "LBEN $_{\gamma=1.0}$", ...
+        "LBEN $_{\gamma=5.0}$", ...
+        "LBEN $_{\gamma=50.0}$", ...
+        "LBEN $_{\gamma=\infty}$", ...
+        "MON"], ...
+        'Location', "NorthEast", ...
+        'Interpreter', 'Latex', ...
+        'FontSize', 18)
+    
+xlabel('Epochs', 'Interpreter', 'Latex')
+ylabel('Training Error', 'Interpreter', 'Latex')
+
+print(fig, '-dpdf', 'cifar_training', '-bestfit');
