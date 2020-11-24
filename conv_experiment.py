@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     elif dataset == "cifar":
         trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
-                                                      test_batch_size=250,
+                                                      test_batch_size=500,
                                                       augment=False,
                                                       use_double=use_double)
 
