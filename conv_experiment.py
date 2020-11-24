@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     elif dataset == "cifar":
         trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
-                                                      test_batch_size=250,
+                                                      test_batch_size=500,
                                                       augment=False,
                                                       use_double=use_double)
 
@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
         # # io.savemat(path + name + ".mat", res)
 
-        for gamma in [1.0, 2.0, 3.0]:
+        for gamma in [5.0, 50.0]:
 
             alpha = 0.5
             max_alpha = 1.0
