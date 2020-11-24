@@ -806,17 +806,16 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     errors = []
 
     # Perform adversarial attacks
-    mu = data_stats["mean"]
-    std = data_stats["std"]
+    mu = cuda(torch.Tensor(data_stats["mean"]))
+    std = cuda(torch.Tensor(data_stats["std"]))
+
+    # unnormalize inputs because foolbox is weird and must re-whiten them
+    uhat = std[..., None, None] * u + mu[..., None, None]
 
     preprocessing = dict(mean=mu, std=std, axis=-3)
-
-    # The preprocessing argument appears to be broken.
     fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
-    # fmodel = fmodel.transform_bounds((0, 1))
-    fmodel = fb.PyTorchModel(model, bounds=(u.min(), u.max()))
     attack = fb.attacks.L2FastGradientAttack()
-    raw, advs, success = attack(fmodel, u, target, epsilons=epsilons)
+    raw, advs, success = attack(fmodel, uhat, target, epsilons=epsilons)
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
 
