@@ -731,7 +731,7 @@ class MultiConvNet(nn.Module):
         return self.Wout(z)
 
 
-def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=500):
+def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=10):
 
     channels = data_stats["feature_size"][0]
     dimu = data_stats["feature_size"][1]
