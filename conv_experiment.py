@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     elif dataset == "cifar":
         trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
-                                                      test_batch_size=1000,
+                                                      test_batch_size=500,
                                                       augment=False,
                                                       use_double=use_double)
 
@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
         # io.savemat(path + name + ".mat", res)
 
-        for gamma in [1.0, 2.0, 3.0, 5.0, 50.0]:
+        for gamma in [5.0, 50.0]:
             alpha = 0.5
             max_alpha = 1.0
 
@@ -191,8 +191,8 @@ if __name__ == "__main__":
 
             LipConvNet.mon.tol = 1E-3
             res = train.test_robustness(LipConvNet, testLoader, data_stats)
-            res["train"] = train_res
-            res["val"] = val_res
+            # res["train"] = train_res
+            # res["val"] = val_res
             io.savemat(path + name + ".mat", res)
 
             print("fin")
