@@ -43,11 +43,16 @@ if __name__ == "__main__":
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
                                                   test_batch_size=4000,
                                                   use_double=False)
+    in_dim = 28
+    in_channels = 1
+    data_stats = {"feature_size": (in_channels, in_dim, in_dim),
+                  "mean": (0.1307,),
+                  "std": (0.3081,)}
 
     load_models = False
 
     path = './models/mnist_varying_size/'
-    epochs = 40
+    epochs = 30
     seed = 1
     tol = 1E-2  # Turn up tolerance when concerned about Lipschitz bound.
     # width = 80
@@ -85,22 +90,22 @@ if __name__ == "__main__":
                 LipNet.to(device)
 
             else:
-                lip_train, lip_test, times = train.train(trainLoader, testLoader,
-                                                         LipNet,
-                                                         max_lr=1e-3,
-                                                         lr_mode='step',
-                                                         step=lr_decay_steps,
-                                                         change_mo=False,
-                                                         epochs=epochs,
-                                                         print_freq=100,
-                                                         tune_alpha=True)
+                lip_train, lip_test = train.train(trainLoader, testLoader,
+                                                  LipNet,
+                                                  max_lr=1e-3,
+                                                  lr_mode='step',
+                                                  step=lr_decay_steps,
+                                                  change_mo=False,
+                                                  epochs=epochs,
+                                                  print_freq=100,
+                                                  tune_alpha=True)
                 torch.save(LipNet.state_dict(), path + name + '.params')
 
             print('Testing model: ', name)
-            res = train.test_robustness(LipNet, testLoader)
+            res = train.test_robustness(LipNet, testLoader, data_stats)
             io.savemat(path + name + '.mat', res)
 
-            train_stats = {"train": lip_train, "test": lip_test, "time": times}
+            train_stats = {"train": lip_train, "test": lip_test}
             io.savemat(path + name + "_times.mat", train_stats)
 
             # models += [LipNet]
