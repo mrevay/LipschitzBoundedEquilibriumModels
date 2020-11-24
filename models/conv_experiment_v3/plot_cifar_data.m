@@ -88,4 +88,5 @@ figure
 hold on
 plot(ff_conv.errors)
 plot(f0.errors)
+plot(f1.errors)
 plot(f5.errors)

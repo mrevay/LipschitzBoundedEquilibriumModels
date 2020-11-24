@@ -66,8 +66,8 @@ if __name__ == "__main__":
     models = []
     results = []
     # for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
-    for width in [20, 50, 80, 110,  140, 250]:
-        for gamma in [1.0]:
+    for width in [20, 50, 80, 110,  140, 250, 1000]:
+        for gamma in [0.5, 1.0, 2.0]:
 
             torch.manual_seed(seed)
             numpy.random.seed(seed)
