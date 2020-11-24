@@ -787,12 +787,12 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
                 Lip.max().sqrt().item()), sep=' ', end='', flush=True)
 
             iter += 1
-            if iter > 25:
+            if iter > 10:
                 if Lip.max() < Lip_last.max() + 1E-4:  # Smaller than 1E-4 round-off error?
                     optimizer.param_groups[0]["lr"] /= 10.0
                     iter = 0
 
-                    if optimizer.param_groups[0]["lr"] <= 1E-5:
+                    if optimizer.param_groups[0]["lr"] <= 1E-4:
                         break
         print()
         print()
@@ -802,7 +802,7 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(0, 15, 40)
+    epsilons = np.linspace(0, 10, 20)
     errors = []
 
     # Perform adversarial attacks
@@ -812,7 +812,7 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     preprocessing = dict(mean=mu, std=std, axis=-3)
 
     # The preprocessing argument appears to be broken.
-    # fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
+    fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
     # fmodel = fmodel.transform_bounds((0, 1))
     fmodel = fb.PyTorchModel(model, bounds=(u.min(), u.max()))
     attack = fb.attacks.L2FastGradientAttack()
