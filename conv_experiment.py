@@ -15,7 +15,7 @@ import splitting as sp
 if __name__ == "__main__":
 
     load_models = True
-    use_double = True
+    use_double = False
     dataset = "cifar"
 
     if use_double:
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     elif dataset == "cifar":
         trainLoader, testLoader = train.cifar_loaders(train_batch_size=128,
-                                                      test_batch_size=500,
+                                                      test_batch_size=250,
                                                       augment=False,
                                                       use_double=use_double)
 
@@ -97,54 +97,54 @@ if __name__ == "__main__":
     #     torch.save(FFConvNet.state_dict(), path + name + '.params')
 
     # res = train.test_robustness(FFConvNet, testLoader, data_stats)
-    # res["train"] = train_res
-    # res["val"] = val_res
+    # # res["train"] = train_res
+    # # res["val"] = val_res
     # io.savemat(path + name + ".mat", res)
 
     for metric in ["full", "identity"]:
-        # alpha = 0.125
-        # max_alpha = 0.25
+        alpha = 1.0
+        max_alpha = 1.0
 
-        # torch.manual_seed(seed)
-        # numpy.random.seed(seed)
+        torch.manual_seed(seed)
+        numpy.random.seed(seed)
 
-        # # # # # Train and test Single layer convolutional LBEN
-        # name = metric + '_conv_w{:d}'.format(width)
-        # LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
-        #                                 in_dim=in_dim,
-        #                                 in_channels=in_channels,
-        #                                 out_channels=width,
-        #                                 alpha=alpha,
-        #                                 max_iter=max_iter,
-        #                                 metric=metric,
-        #                                 init="default",
-        #                                 tol=tol,
-        #                                 m=m,
-        #                                 pool=pool,
-        #                                 verbose=False)
+        # # # # Train and test Single layer convolutional LBEN
+        name = metric + '_conv_w{:d}'.format(width)
+        LbenConvNet = train.LBENConvNet(sp.MONForwardBackwardSplitting,
+                                        in_dim=in_dim,
+                                        in_channels=in_channels,
+                                        out_channels=width,
+                                        alpha=alpha,
+                                        max_iter=max_iter,
+                                        metric=metric,
+                                        init="default",
+                                        tol=tol,
+                                        m=m,
+                                        pool=pool,
+                                        verbose=False)
 
-        # # Load or train a new model.
-        # if load_models:
-        #     LbenConvNet.load_state_dict(torch.load(path + name + '.params'))
+        # Load or train a new model.
+        if load_models:
+            LbenConvNet.load_state_dict(torch.load(path + name + '.params'))
 
-        # else:
-        #     train_res, val_res = train.train(trainLoader, testLoader,
-        #                                      LbenConvNet,
-        #                                      max_lr=1e-3,
-        #                                      lr_mode='step',
-        #                                      step=lr_decay_steps,
-        #                                      change_mo=False,
-        #                                      epochs=epochs,
-        #                                      print_freq=100,
-        #                                      tune_alpha=True,
-        #                                      max_alpha=max_alpha,
-        #                                      warmstart=False)
+        else:
+            train_res, val_res = train.train(trainLoader, testLoader,
+                                             LbenConvNet,
+                                             max_lr=1e-3,
+                                             lr_mode='step',
+                                             step=lr_decay_steps,
+                                             change_mo=False,
+                                             epochs=epochs,
+                                             print_freq=100,
+                                             tune_alpha=True,
+                                             max_alpha=max_alpha,
+                                             warmstart=False)
 
-        #     torch.save(LbenConvNet.state_dict(), path + name + '.params')
+            torch.save(LbenConvNet.state_dict(), path + name + '.params')
 
-        # # Perform tests for nom performance, Lipschitz constant and robustness.
-        # LbenConvNet.mon.tol = 1E-4
-        # res = train.test_robustness(LbenConvNet, testLoader, data_stats)
+        # Perform tests for nom performance, Lipschitz constant and robustness.
+        LbenConvNet.mon.tol = 1E-3
+        res = train.test_robustness(LbenConvNet, testLoader, data_stats)
         # res["train"] = train_res
         # res["val"] = val_res
 
