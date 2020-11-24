@@ -79,13 +79,5 @@ plot(i50.val, 'LineWidth', 1.5)
 % plot(i0.val, 'LineWidth', 1.5)
 
 %% Robustness curves
-ff_conv = load('ff_conv_w81.mat');
-f0 = load('full_conv_w81.mat');
-f1 = load('full_conv_w81_L1.0.mat');
-f5 = load('full_conv_w81_L5.0.mat');
+ff_conv = load('ff_conv_w81')
 
-figure
-hold on
-plot(ff_conv.errors)
-plot(f0.errors)
-plot(f5.errors)
