@@ -802,7 +802,7 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(0, 15, 40)
+    epsilons = np.linspace(0, 10, 20)
     errors = []
 
     # Perform adversarial attacks
