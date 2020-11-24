@@ -731,7 +731,7 @@ class MultiConvNet(nn.Module):
         return self.Wout(z)
 
 
-def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=500):
+def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=10):
 
     channels = data_stats["feature_size"][0]
     dimu = data_stats["feature_size"][1]
@@ -787,12 +787,12 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
                 Lip.max().sqrt().item()), sep=' ', end='', flush=True)
 
             iter += 1
-            if iter > 25:
+            if iter > 10:
                 if Lip.max() < Lip_last.max() + 1E-4:  # Smaller than 1E-4 round-off error?
                     optimizer.param_groups[0]["lr"] /= 10.0
                     iter = 0
 
-                    if optimizer.param_groups[0]["lr"] <= 1E-5:
+                    if optimizer.param_groups[0]["lr"] <= 1E-4:
                         break
         print()
         print()
