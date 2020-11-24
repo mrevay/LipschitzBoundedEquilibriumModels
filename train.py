@@ -115,30 +115,36 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
                     partialEpoch, nProcessed, nTrain,
                     100. * batch_idx / len(trainLoader),
                     ce_loss.item(), err))
-                model.mon.stats.report()
-                model.mon.stats.reset()
+
+                if hasattr(model, 'mon'):
+                    model.mon.stats.report()
+                    model.mon.stats.reset()
 
             optimizer.step()
 
-            if hasattr(model.mon.linear_module, 'Lambda'):
-                model.mon.linear_module.Lambda.data[model.mon.linear_module.Lambda.data <= 1E-3] = 1E-3
-            if hasattr(model.mon.linear_module, 'Psi'):
-                model.mon.linear_module.Psi.data[model.mon.linear_module.Psi.data <= 1E-3] = 1E-3
+            if hasattr(model, 'mon'):
+                if hasattr(model.mon.linear_module, 'Lambda'):
+                    model.mon.linear_module.Lambda.data[model.mon.linear_module.Lambda.data <= 1E-3] = 1E-3
+                if hasattr(model.mon.linear_module, 'Psi'):
+                    model.mon.linear_module.Psi.data[model.mon.linear_module.Psi.data <= 1E-3] = 1E-3
 
-            if hasattr(model.mon.linear_module, 'g'):
-                if model.mon.linear_module.g < 0.0:
-                    model.mon.linear_module.g.data = 0.0
-                    print("------------------Performing projection-------------------")
+                if hasattr(model.mon.linear_module, 'g'):
+                    if model.mon.linear_module.g < 0.0:
+                        model.mon.linear_module.g.data = 0.0
+                        print(
+                            "------------------Performing projection-------------------")
 
-            if hasattr(model.mon.linear_module, 'a'):
-                if model.mon.linear_module.a < 0.0:
-                    model.mon.linear_module.a.data = 0.0
-                    print("------------------Performing projection-------------------")
+                if hasattr(model.mon.linear_module, 'a'):
+                    if model.mon.linear_module.a < 0.0:
+                        model.mon.linear_module.a.data = 0.0
+                        print(
+                            "------------------Performing projection-------------------")
 
-            if hasattr(model.mon.linear_module, 'u'):
-                if model.mon.linear_module.u < 0.0:
-                    model.mon.linear_module.u.data = 0.0
-                    print("------------------Performing projection-------------------")
+                if hasattr(model.mon.linear_module, 'u'):
+                    if model.mon.linear_module.u < 0.0:
+                        model.mon.linear_module.u.data = 0.0
+                        print(
+                            "------------------Performing projection-------------------")
 
         EPOCH_TIMES.append(time.time() - t0)
         if lr_mode == 'step':
@@ -441,6 +447,25 @@ class LBENConvNet(nn.Module):
         return self.Wout(z.view(z.shape[0], -1))
 
 
+class FFConvNet(nn.Module):
+
+    def __init__(self, in_dim=28, in_channels=1, out_channels=32, pool=4, ** kwargs):
+        super().__init__()
+        n = in_dim
+        self.pool = pool
+        self.out_dim = out_channels * (n // self.pool) ** 2
+        self.nl = torch.nn.ReLU()
+        self.conv_layer = torch.nn.Conv2d(
+            in_channels, out_channels, 3, stride=1)
+        self.Wout = nn.Linear(self.out_dim, 10)
+
+    def forward(self, x):
+        x = F.pad(x, (1, 1, 1, 1))
+        z = self.nl(self.conv_layer(x))
+        z = F.avg_pool2d(z, self.pool)
+        return self.Wout(z.view(z.shape[0], -1))
+
+
 class LBENConvNet_Test_Init(nn.Module):
 
     def __init__(self, splittingMethod, in_dim=28, in_channels=1, out_channels=32, m=0.1, pool=4, **kwargs):
@@ -706,7 +731,7 @@ class MultiConvNet(nn.Module):
         return self.Wout(z)
 
 
-def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=50):
+def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=10):
 
     channels = data_stats["feature_size"][0]
     dimu = data_stats["feature_size"][1]
@@ -773,12 +798,11 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
         print()
 
     # Estimate Adversarial perturbations
-    epsilons = np.linspace(1E-2, 5, 50)
     u = cuda(batch[0])
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(1E-2, 15, 40)
+    epsilons = np.linspace(0, 15, 40)
     errors = []
 
     # Perform adversarial attacks
@@ -786,7 +810,11 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     std = data_stats["std"]
 
     preprocessing = dict(mean=mu, std=std, axis=-3)
-    fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
+
+    # The preprocessing argument appears to be broken.
+    # fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
+    # fmodel = fmodel.transform_bounds((0, 1))
+    fmodel = fb.PyTorchModel(model, bounds=(u.min(), u.max()))
     attack = fb.attacks.L2FastGradientAttack()
     raw, advs, success = attack(fmodel, u, target, epsilons=epsilons)
 
