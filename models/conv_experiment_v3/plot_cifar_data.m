@@ -5,6 +5,7 @@ set(0,'DefaultLineMarkerSize',28);
 
 % Compare mon and lben for different bounds
 i50 = load('./identity_conv_w81_L50.0.mat')
+i8 = load('./identity_conv_w81_L8.0.mat')
 i5 = load('./identity_conv_w81_L5.0.mat')
 i3 = load('./identity_conv_w81_L3.0.mat')
 i2 = load('./identity_conv_w81_L2.0.mat')
@@ -30,6 +31,7 @@ plot(f1.Lipschitz, f1.nominal, 'x', 'LineWidth', 4);
 
 plot(i0.Lipschitz, i0.nominal,'o', 'LineWidth', 4);
 plot(i50.Lipschitz, i50.nominal, 'o', 'LineWidth', 4);
+% plot(i8.Lipschitz, i8.nominal, 'o', 'LineWidth', 4);
 plot(i5.Lipschitz, i5.nominal, 'o', 'LineWidth', 4);
 plot(i3.Lipschitz, i3.nominal, 'o', 'LineWidth', 4);
 plot(i2.Lipschitz, i2.nominal, 'o', 'LineWidth', 4);
@@ -39,14 +41,17 @@ ax = gca
 ax.XScale = 'log'
 ax.YScale = 'log'
 
+xlabel('Lipschitz Constant')
+ylabel('Test Performance')
+
 grid on 
 box on
 
 %% Plot Training and Validaiton Curves for f0 and i0
-figure 
-hold on
-plot(f5.train, 'LineWidth', 1.5)
-plot(i5.train, 'LineWidth', 1.5)
+% figure 
+% hold on
+% plot(f5.train, 'LineWidth', 1.5)
+% plot(i5.train, 'LineWidth', 1.5)
 
 figure 
 hold on
@@ -54,7 +59,22 @@ hold on
 % plot(i0.val, 'LineWidth', 1.5)
 
 
+plot(f1.val, 'LineWidth', 1.5)
+plot(i1.val, 'LineWidth', 1.5)
+
+plot(f2.val, 'LineWidth', 1.5)
+plot(i2.val, 'LineWidth', 1.5)
+
+plot(f3.val, 'LineWidth', 1.5)
+plot(i3.val, 'LineWidth', 1.5)
+
+
 plot(f5.val, 'LineWidth', 1.5)
 plot(i5.val, 'LineWidth', 1.5)
 
+plot(f50.val, 'LineWidth', 1.5)
+plot(i50.val, 'LineWidth', 1.5)
+
+% plot(f0.val, 'LineWidth', 1.5)
+% plot(i0.val, 'LineWidth', 1.5)
 
