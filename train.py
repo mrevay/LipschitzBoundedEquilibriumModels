@@ -812,7 +812,7 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     preprocessing = dict(mean=mu, std=std, axis=-3)
 
     # The preprocessing argument appears to be broken.
-    # fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
+    fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
     # fmodel = fmodel.transform_bounds((0, 1))
     fmodel = fb.PyTorchModel(model, bounds=(u.min(), u.max()))
     attack = fb.attacks.L2FastGradientAttack()
