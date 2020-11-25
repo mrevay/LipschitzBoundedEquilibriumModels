@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-import cvxpy as cp
-
 
 class MONSingleFc(nn.Module):
     """ Simple MON linear class, just a single full multiply. """
