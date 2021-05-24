@@ -51,16 +51,43 @@ if __name__ == "__main__":
 
     load_models = False
 
-    path = './models/mnist_varying_size/'
+    path = './models/adversarial_training/'
     epochs = 30
     seed = 1
     tol = 1E-2  # Turn up tolerance when concerned about Lipschitz bound.
-    # width = 80
+    width = 80
     lr_decay_steps = 10
 
     image_size = 28 * 28
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # Train FF convolutional network
+    for epsilon in [0.0, 0.5, 1.0, 2.0, 5.0, 10.0]:
+
+        name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
+        FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,
+                                             width=width)
+
+        if load_models:
+            FFNet.load_state_dict(torch.load(path + name + '.params'))
+        else:
+
+            train_res, val_res = train.adversarial_training(trainLoader, testLoader,
+                                                            FFNet, data_stats, epsilon,
+                                                            max_lr=1e-3,
+                                                            lr_mode='step',
+                                                            step=lr_decay_steps,
+                                                            change_mo=False,
+                                                            epochs=epochs,
+                                                            print_freq=100,
+                                                            tune_alpha=False,
+                                                            warmstart=False)
+
+            torch.save(FFNet.state_dict(), path + name + '.params')
+
+        res = train.test_robustness(FFNet, testLoader, data_stats)
+        io.savemat(path + name + ".mat", res)
 
     # # Lipschitz Networks
     models = []
@@ -204,7 +231,6 @@ if __name__ == "__main__":
                                                  epochs=epochs,
                                                  print_freq=100,
                                                  tune_alpha=True)
-        # torch.save(monNet.state_dict(), path + name + '.params')
 
     # res = train.test_robustness(monNet, testLoader)
     # io.savemat(path + name + '.mat', res)

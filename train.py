@@ -13,6 +13,7 @@ import time
 import foolbox as fb
 
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimage
 
 import utils
 import NODEN
@@ -99,6 +100,181 @@ def train(trainLoader, testLoader, model, epochs=15, max_lr=1e-3,
                 preds = model(data, z0=z0[batch_idx])
             else:
                 preds = model(data)
+
+            ce_loss = nn.CrossEntropyLoss()(preds, target)
+            tloss += ce_loss.item()
+
+            ce_loss.backward()
+            nProcessed += len(data)
+            incorrect_train += preds.float().argmax(1).ne(target.data).sum()
+
+            if batch_idx % print_freq == 0 and batch_idx > 0:
+                incorrect = preds.float().argmax(1).ne(target.data).sum()
+                err = 100. * incorrect.float() / float(len(data))
+                partialEpoch = epoch + batch_idx / len(trainLoader) - 1
+                print('Train Epoch: {:.2f} [{}/{} ({:.0f}%)]\tLoss: {:.4f}\tError: {:.2f}'.format(
+                    partialEpoch, nProcessed, nTrain,
+                    100. * batch_idx / len(trainLoader),
+                    ce_loss.item(), err))
+
+                if hasattr(model, 'mon'):
+                    model.mon.stats.report()
+                    model.mon.stats.reset()
+
+            optimizer.step()
+
+            if hasattr(model, 'mon'):
+                if hasattr(model.mon.linear_module, 'Lambda'):
+                    model.mon.linear_module.Lambda.data[model.mon.linear_module.Lambda.data <= 1E-3] = 1E-3
+                if hasattr(model.mon.linear_module, 'Psi'):
+                    model.mon.linear_module.Psi.data[model.mon.linear_module.Psi.data <= 1E-3] = 1E-3
+
+                if hasattr(model.mon.linear_module, 'g'):
+                    if model.mon.linear_module.g < 0.0:
+                        model.mon.linear_module.g.data = 0.0
+                        print(
+                            "------------------Performing projection-------------------")
+
+                if hasattr(model.mon.linear_module, 'a'):
+                    if model.mon.linear_module.a < 0.0:
+                        model.mon.linear_module.a.data = 0.0
+                        print(
+                            "------------------Performing projection-------------------")
+
+                if hasattr(model.mon.linear_module, 'u'):
+                    if model.mon.linear_module.u < 0.0:
+                        model.mon.linear_module.u.data = 0.0
+                        print(
+                            "------------------Performing projection-------------------")
+
+        EPOCH_TIMES.append(time.time() - t0)
+        if lr_mode == 'step':
+            lr_scheduler.step()
+
+        if model_path is not None:
+            torch.save(model.state_dict(), model_path)
+
+        # estimate_Lip(model, 50, data.shape[1], data.shape[2])
+        print("Tot train time: {}".format(time.time() - start))
+        train_loss.append(100. * incorrect_train.cpu().item() /
+                          float(len(trainLoader.dataset)))
+
+        start = time.time()
+        v_loss = 0
+        test_loss = 0
+        incorrect_val = 0
+        model.eval()
+
+        with torch.no_grad():  # Disable torch.no grad as FISTA S.V. est requires gradient.
+
+            for batch in testLoader:
+                data, target = cuda(batch[0]), cuda(batch[1])
+                preds = model(data)
+                ce_loss = nn.CrossEntropyLoss(reduction='sum')(preds, target)
+                test_loss += ce_loss
+                v_loss += ce_loss.item()
+                incorrect_val += preds.float().argmax(1).ne(target.data).sum()
+            test_loss /= len(testLoader.dataset)
+            nTotal = len(testLoader.dataset)
+            err = 100. * incorrect_val.float() / float(nTotal)
+            print('\n\nTest set: Average loss: {:.4f}, Error: {}/{} ({:.2f}%)'.format(
+                test_loss, incorrect_val, nTotal, err))
+
+            val_loss.append(100. * incorrect_val.cpu().item() / float(nTotal))
+
+            print("Tot test time: {}\n\n\n\n".format(time.time() - start))
+
+    return train_loss, val_loss
+
+
+def adversarial_training(trainLoader, testLoader, model, data_stats, epsilon, epochs=15,
+                         max_lr=1e-3, print_freq=10, change_mo=True,
+                         model_path=None, lr_mode='step', step=10,
+                         tune_alpha=False, max_alpha=1.0, warmstart=False):
+
+    mu = cuda(torch.Tensor(data_stats["mean"]))
+    std = cuda(torch.Tensor(data_stats["std"]))
+    channels = data_stats["feature_size"][0]
+    dimu = data_stats["feature_size"][1]
+    dimv = data_stats["feature_size"][2]
+
+    optimizer = optim.Adam(model.parameters(), lr=max_lr)
+
+    if lr_mode == '1cycle':
+        def lr_schedule(t): return np.interp([t],
+                                             [0, (epochs-5)//2,
+                                              epochs-5, epochs],
+                                             [1e-3, max_lr, 1e-3, 1e-3])[0]
+    elif lr_mode == 'step':
+        lr_scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step, gamma=0.1, last_epoch=-1)
+    elif lr_mode != 'constant':
+        raise Exception('lr mode one of constant, step, 1cycle')
+
+    if change_mo:
+        max_mo = 0.85
+
+        def momentum_schedule(t): return np.interp([t],
+                                                   [0, (epochs - 5) // 2,
+                                                    epochs - 5, epochs],
+                                                   [0.95, max_mo, 0.95, 0.95])[0]
+
+    train_loss = []
+    val_loss = []
+    EPOCH_TIMES = []
+
+    model = cuda(model)
+
+    # Create variable to store network state for warmstart.
+    # This only works for confolutional network
+    if warmstart:
+        nImages = trainLoader.dataset.data.shape[0]
+        width = model.mon.linear_module.U.weight.shape[0]
+        im_size = trainLoader.dataset.data.shape[2] + 2
+        z0 = torch.zeros((nImages, width, im_size, im_size))
+
+    for epoch in range(1, 1 + epochs):
+        tloss = 0
+
+        nProcessed = 0
+        incorrect_train = 0
+        nTrain = len(trainLoader.dataset)
+        model.train()
+        start = time.time()
+        t0 = time.time()
+        for batch_idx, batch in enumerate(trainLoader):
+            if (batch_idx == 30 or batch_idx == int(len(trainLoader)/2)) and tune_alpha:
+                run_tune_alpha(model, cuda(batch[0]), max_alpha)
+            if lr_mode == '1cycle':
+                lr = lr_schedule(epoch - 1 + batch_idx / len(trainLoader))
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = lr
+            if change_mo:
+                beta1 = momentum_schedule(
+                    epoch - 1 + batch_idx / len(trainLoader))
+                for param_group in optimizer.param_groups:
+                    param_group['betas'] = (
+                        beta1, optimizer.param_groups[0]['betas'][1])
+
+            data, target = cuda(batch[0]), cuda(batch[1])
+
+            # Calculate adversarial examples
+            preprocessing = dict(mean=mu, std=std)
+            model.eval()
+            fmodel = fb.PyTorchModel(model, bounds=(0, 1),
+                                     preprocessing=preprocessing)
+
+            attack = fb.attacks.L2FastGradientAttack()
+            raw, advs, success = attack(fmodel, data, target, epsilons=epsilon)
+
+            model.train()
+
+            # Optimize...
+            optimizer.zero_grad()
+            if warmstart:
+                preds = model(advs, z0=z0[batch_idx])
+            else:
+                preds = model(advs)
 
             ce_loss = nn.CrossEntropyLoss()(preds, target)
             tloss += ce_loss.item()
@@ -464,6 +640,20 @@ class FFConvNet(nn.Module):
         z = self.nl(self.conv_layer(x))
         z = F.avg_pool2d(z, self.pool)
         return self.Wout(z.view(z.shape[0], -1))
+
+
+class FF_Fully_Connected_Net(nn.Module):
+
+    def __init__(self, in_dim=28*28, width=80, ** kwargs):
+        super().__init__()
+        self.nl = torch.nn.ReLU()
+        self.weight = torch.nn.Linear(in_dim, width)
+        self.Wout = nn.Linear(width, 10)
+
+    def forward(self, x):
+        x = x.view(x.shape[0], -1)
+        z = self.nl(self.weight(x))
+        return self.Wout(z)
 
 
 class LBENConvNet_Test_Init(nn.Module):
