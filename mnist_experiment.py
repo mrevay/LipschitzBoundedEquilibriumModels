@@ -41,7 +41,7 @@ class simple_fc(torch.nn.Module):
 if __name__ == "__main__":
 
     trainLoader, testLoader = train.mnist_loaders(train_batch_size=128,
-                                                  test_batch_size=4000,
+                                                  test_batch_size=10000,
                                                   use_double=False)
     in_dim = 28
     in_channels = 1
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Train FF convolutional network
-    for epsilon in [0.0, 0.5, 1.0, 2.0, 5.0, 10.0]:
+    for epsilon in [0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0]:
 
         name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
         FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,

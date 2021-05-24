@@ -258,6 +258,9 @@ def adversarial_training(trainLoader, testLoader, model, data_stats, epsilon, ep
 
             data, target = cuda(batch[0]), cuda(batch[1])
 
+            # Fool box needs to re-whiten
+            uhat = std[..., None, None] * data + mu[..., None, None]
+
             # Calculate adversarial examples
             preprocessing = dict(mean=mu, std=std)
             model.eval()
@@ -265,7 +268,9 @@ def adversarial_training(trainLoader, testLoader, model, data_stats, epsilon, ep
                                      preprocessing=preprocessing)
 
             attack = fb.attacks.L2FastGradientAttack()
-            raw, advs, success = attack(fmodel, data, target, epsilons=epsilon)
+            raw, advs, success = attack(fmodel, uhat, target, epsilons=epsilon)
+
+            advs = (advs - mu) / std
 
             model.train()
 
@@ -992,22 +997,24 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(0, 6, 20)
+    epsilons = np.linspace(0, 20, 40)
     errors = []
 
     # Perform adversarial attacks
     mu = cuda(torch.Tensor(data_stats["mean"]))
     std = cuda(torch.Tensor(data_stats["std"]))
 
-    # unnormalize inputs because foolbox is weird and must re-whiten them
+    # unnormalize inputs because foolbox is weird and must re-whiten them...
     uhat = std[..., None, None] * u + mu[..., None, None]
 
-    preprocessing = dict(mean=mu, std=std, axis=-3)
+    preprocessing = dict(mean=mu, std=std)
     fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
     attack = fb.attacks.L2FastGradientAttack()
     raw, advs, success = attack(fmodel, uhat, target, epsilons=epsilons)
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
+
+    print(errors[0::7])
 
     results = {"nominal": nominal_perf.to('cpu').item(
     ), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
