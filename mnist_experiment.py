@@ -62,32 +62,32 @@ if __name__ == "__main__":
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    # # Train FF convolutional network
-    # for epsilon in [0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0]:
+    # # Adversarial Training for  FF network
+    for epsilon in [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0]:
 
-    #     name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
-    #     FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,
-    #                                          width=width)
+        name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
+        FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,
+                                             width=width)
 
-    #     if load_models:
-    #         FFNet.load_state_dict(torch.load(path + name + '.params'))
-    #     else:
+        if load_models:
+            FFNet.load_state_dict(torch.load(path + name + '.params'))
+        else:
 
-    #         train_res, val_res = train.adversarial_training(trainLoader, testLoader,
-    #                                                         FFNet, data_stats, epsilon,
-    #                                                         max_lr=1e-3,
-    #                                                         lr_mode='step',
-    #                                                         step=lr_decay_steps,
-    #                                                         change_mo=False,
-    #                                                         epochs=epochs,
-    #                                                         print_freq=100,
-    #                                                         tune_alpha=False,
-    #                                                         warmstart=False)
+            train_res, val_res = train.adversarial_training(trainLoader, testLoader,
+                                                            FFNet, data_stats, epsilon,
+                                                            max_lr=1e-3,
+                                                            lr_mode='step',
+                                                            step=lr_decay_steps,
+                                                            change_mo=False,
+                                                            epochs=epochs,
+                                                            print_freq=100,
+                                                            tune_alpha=False,
+                                                            warmstart=False)
 
-    #         torch.save(FFNet.state_dict(), path + name + '.params')
+            torch.save(FFNet.state_dict(), path + name + '.params')
 
-    #     res = train.test_robustness(FFNet, testLoader, data_stats)
-    #     io.savemat(path + name + ".mat", res)
+        res = train.test_robustness(FFNet, testLoader, data_stats)
+        io.savemat(path + name + ".mat", res)
 
     # # Lipschitz Networks
     models = []
@@ -107,7 +107,7 @@ if __name__ == "__main__":
                                          alpha=1.0,
                                          max_iter=300,
                                          tol=tol,
-                                         m=1.0,
+                                         m=1E-5,
                                          gamma=gamma,
                                          verbose=False)
 
@@ -221,15 +221,15 @@ if __name__ == "__main__":
         monNet.to(device)
 
     else:
-        mon_train, mon_test, times = train.train(trainLoader, testLoader,
-                                                 monNet,
-                                                 max_lr=1e-3,
-                                                 lr_mode='step',
-                                                 step=lr_decay_steps,
-                                                 change_mo=False,
-                                                 epochs=epochs,
-                                                 print_freq=100,
-                                                 tune_alpha=True)
+        mon_train, mon_test = train.train(trainLoader, testLoader,
+                                          monNet,
+                                          max_lr=1e-3,
+                                          lr_mode='step',
+                                          step=lr_decay_steps,
+                                          change_mo=False,
+                                          epochs=epochs,
+                                          print_freq=100,
+                                          tune_alpha=True)
 
     res = train.test_robustness(monNet, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
