@@ -66,7 +66,7 @@ class DQNCartPoleLearner():
 
         # Parameters of exploration vs. exploitation
         self.epsilon_max     = 0.95     # probability of exploration, initially only explore (0.95)
-        self.epsilon_decay   = 0.999    # amount by which to decay after every action (0.9998)
+        self.epsilon_decay   = 0.9998   # amount by which to decay after every action (0.9998)
         self.epsilon_min     = 0.005    # minimum value of epsilon (0.05)
         self.epsilon         = self.epsilon_max
 
@@ -87,7 +87,7 @@ class DQNCartPoleLearner():
         self.criterion = nn.MSELoss()
 
         # For plotting/saving (save the loss later!!)
-        self.name = "cartpole_03"
+        self.name = "cartpole_05"
         self.loss = []
 
     def make_hyperparams_dict(self):

@@ -9,10 +9,7 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
-# import lben
-# import NODEN <----- NEED CVXPY!!
-# import mon
-
+import train
 from cartpole_dqn import FCNetwork
 
 
@@ -41,7 +38,7 @@ class LearnedAgent():
 
 
 # Read in a model and its info
-fname = "saved_models/cartpole_03"
+fname = "saved_models/cartpole_04"
 model = FCNetwork(4,2)
 model.load_state_dict(torch.load(fname + ".pt"))
 agent = LearnedAgent(model)
@@ -52,10 +49,11 @@ with open(fname + ".json") as f:
 # Try to test it out on the cart-pole environment
 env = gym.make('CartPole-v0')
 state = env.reset()
-my_error = 0.0
-for _ in range(200):
+my_error = 0.05
+for _ in range(500):
     env.render()
     a = agent(state)
     out = env.step(a)
-    state = out[0] + my_error
+    out = env.step(env.action_space.sample())
+    # state = out[0] + my_error*np.random.randn()
 env.close()
