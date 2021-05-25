@@ -1,0 +1,1 @@
+{"name": "cartpole_03", "discount_fact": 0.99, "learning_rate": 0.0001, "batch_size": 128, "train_start": 1000, "epsilon_set": [0.95, 0.999, 0.005], "memory_size": 14000, "clipping": 1.0, "optimizer": "Adam", "lossfunc": "MSE", "scores": [23.0, 12.0], "mean_scores": [23.0, 17.5], "random_seed": 24}
