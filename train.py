@@ -926,12 +926,12 @@ class MultiConvNet(nn.Module):
         return self.Wout(z)
 
 
-def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=10):
+def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=100):
 
     channels = data_stats["feature_size"][0]
     dimu = data_stats["feature_size"][1]
     dimv = data_stats["feature_size"][2]
-    maxIter = 1000
+    maxIter = 2000
     model = model.eval()
     model.to(device)
     # Lip_batches = 50  # Number of points to use when calculating the LC
@@ -983,11 +983,11 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
 
             iter += 1
             if iter > 10:
-                if Lip.max() < Lip_last.max() + 1E-4:  # Smaller than 1E-4 round-off error?
+                if Lip.max() < Lip_last.max() + 1E-8:  # Smaller than 1E-4 round-off error?
                     optimizer.param_groups[0]["lr"] /= 10.0
                     iter = 0
 
-                    if optimizer.param_groups[0]["lr"] <= 1E-4:
+                    if optimizer.param_groups[0]["lr"] <= 1E-6:
                         break
         print()
         print()

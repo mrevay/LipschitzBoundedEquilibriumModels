@@ -49,7 +49,7 @@ if __name__ == "__main__":
                   "mean": (0.1307,),
                   "std": (0.3081,)}
 
-    load_models = False
+    load_models = True
 
     path = './models/adversarial_training/'
     epochs = 30
@@ -93,8 +93,10 @@ if __name__ == "__main__":
     models = []
     results = []
     # for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
-    for width in [20, 50, 80, 110,  140, 250, 1000]:
-        for gamma in [0.5, 1.0, 2.0]:
+    # for width in [20, 50, 80, 110,  140, 250, 1000]:
+    for width in [80]:
+        # for gamma in [0.5, 1.0, 2.0]:
+        for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
 
             torch.manual_seed(seed)
             numpy.random.seed(seed)
@@ -132,8 +134,8 @@ if __name__ == "__main__":
             res = train.test_robustness(LipNet, testLoader, data_stats)
             io.savemat(path + name + '.mat', res)
 
-            train_stats = {"train": lip_train, "test": lip_test}
-            io.savemat(path + name + "_times.mat", train_stats)
+            # train_stats = {"train": lip_train, "test": lip_test}
+            # io.savemat(path + name + "_times.mat", train_stats)
 
             # models += [LipNet]
             # results += [res]
@@ -167,43 +169,43 @@ if __name__ == "__main__":
                                                      tune_alpha=True)
         torch.save(unconNet.state_dict(), path + name + '.params')
 
-    res = train.test_robustness(unconNet, testLoader)
+    res = train.test_robustness(unconNet, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
-    train_stats = {"train": uncon_train, "test": uncon_test, "time": times}
-    io.savemat(path + name + "_times.mat", train_stats)
+    # train_stats = {"train": uncon_train, "test": uncon_test, "time": times}
+    # io.savemat(path + name + "_times.mat", train_stats)
 
     # Ode stability condition
-    torch.manual_seed(seed)
-    numpy.random.seed(seed)
-    name = 'ode_w{:d}'.format(width)
+    # torch.manual_seed(seed)
+    # numpy.random.seed(seed)
+    # name = 'ode_w{:d}'.format(width)
 
-    odeNet = train.NODENFcNet(sp.MONPeacemanRachford,
-                              in_dim=image_size,
-                              out_dim=width,
-                              alpha=1.0,
-                              max_iter=300,
-                              tol=tol,
-                              m=1.0)
+    # odeNet = train.NODENFcNet(sp.MONPeacemanRachford,
+    #                           in_dim=image_size,
+    #                           out_dim=width,
+    #                           alpha=1.0,
+    #                           max_iter=300,
+    #                           tol=tol,
+    #                           m=1.0)
 
-    if load_models:
-        odeNet.load_state_dict(torch.load(path + name + '.params'))
-        odeNet.to(device)
-    else:
-        ode_train, ode_test, times = train.train(trainLoader, testLoader,
-                                                 odeNet,
-                                                 max_lr=1e-3,
-                                                 lr_mode='step',
-                                                 step=lr_decay_steps,
-                                                 change_mo=False,
-                                                 epochs=epochs,
-                                                 print_freq=100,
-                                                 tune_alpha=True)
-        # torch.save(odeNet.state_dict(), path + name + '.params')
+    # if load_models:
+    #     odeNet.load_state_dict(torch.load(path + name + '.params'))
+    #     odeNet.to(device)
+    # else:
+    #     ode_train, ode_test, times = train.train(trainLoader, testLoader,
+    #                                              odeNet,
+    #                                              max_lr=1e-3,
+    #                                              lr_mode='step',
+    #                                              step=lr_decay_steps,
+    #                                              change_mo=False,
+    #                                              epochs=epochs,
+    #                                              print_freq=100,
+    #                                              tune_alpha=True)
+    #     # torch.save(odeNet.state_dict(), path + name + '.params')
 
-    # res = train.test_robustness(odeNet, testLoader)
+    # res = train.test_robustness(odeNet, testLoader, data_stats)
     # io.savemat(path + name + '.mat', res)
-    train_stats = {"train": ode_train, "test": ode_test, "time": times}
-    io.savemat(path + name + "_times.mat", train_stats)
+    # train_stats = {"train": ode_train, "test": ode_test, "time": times}
+    # io.savemat(path + name + "_times.mat", train_stats)
 
     # Monotone operator network
     torch.manual_seed(seed)
@@ -232,17 +234,17 @@ if __name__ == "__main__":
                                                  print_freq=100,
                                                  tune_alpha=True)
 
-    # res = train.test_robustness(monNet, testLoader)
-    # io.savemat(path + name + '.mat', res)
-    train_stats = {"train": mon_train, "test": mon_test, "time": times}
-    io.savemat(path + name + "_times.mat", train_stats)
+    res = train.test_robustness(monNet, testLoader, data_stats)
+    io.savemat(path + name + '.mat', res)
+    # train_stats = {"train": mon_train, "test": mon_test, "time": times}
+    # io.savemat(path + name + "_times.mat", train_stats)
 
     name = 'lmt_c1_w{:d}'.format(width)
     lmt0 = simple_fc(image_size, width, 10,
                      './models/lmt_models/mnist_weights_c1.0.mat')
     lmt0.cuda()
     print('Testing model: ', name)
-    res = train.test_robustness(lmt0, testLoader)
+    res = train.test_robustness(lmt0, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
 
     name = 'lmt_c10_w{:d}'.format(width)
@@ -250,7 +252,7 @@ if __name__ == "__main__":
                      './models/lmt_models/mnist_weights_c10.0.mat')
     lmt0.cuda()
     print('Testing model: ', name)
-    res = train.test_robustness(lmt0, testLoader)
+    res = train.test_robustness(lmt0, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
 
     name = 'lmt_c100_w{:d}'.format(width)
@@ -258,7 +260,7 @@ if __name__ == "__main__":
                      './models/lmt_models/mnist_weights_c100.0.mat')
     lmt0.cuda()
     print('Testing model: ', name)
-    res = train.test_robustness(lmt0, testLoader)
+    res = train.test_robustness(lmt0, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
 
     name = 'lmt_c250_w{:d}'.format(width)
@@ -266,7 +268,7 @@ if __name__ == "__main__":
                      './models/lmt_models/mnist_weights_c250.0.mat')
     lmt0.cuda()
     print('Testing model: ', name)
-    res = train.test_robustness(lmt0, testLoader)
+    res = train.test_robustness(lmt0, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
 
     name = 'lmt_c500_w{:d}'.format(width)
@@ -274,7 +276,7 @@ if __name__ == "__main__":
                      './models/lmt_models/mnist_weights_c500.0.mat')
     lmt0.cuda()
     print('Testing model: ', name)
-    res = train.test_robustness(lmt0, testLoader)
+    res = train.test_robustness(lmt0, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
 
     name = 'lmt_c1000_w{:d}'.format(width)
@@ -282,7 +284,7 @@ if __name__ == "__main__":
                      './models/lmt_models/mnist_weights_c1000.0.mat')
     lmt0.cuda()
     print('Testing model: ', name)
-    res = train.test_robustness(lmt0, testLoader)
+    res = train.test_robustness(lmt0, testLoader, data_stats)
     io.savemat(path + name + '.mat', res)
 
     print('~fin~')
