@@ -13,21 +13,22 @@ aa20p0 = load('./models/adversarial_training/ff_w80_eps20.0.mat')
 
 
 %%
-g02 = load('./models/fc_lip0.2_w80.mat')
-g03 = load('./models/fc_lip0.4_w80.mat')
-g03 = load('./models/fc_lip0.3_w80.mat')
-g04 = load('./models/fc_lip0.4_w80.mat')
-g05 = load('./models/fc_lip0.5_w80.mat')
-g08 = load('./models/fc_lip0.8_w80.mat')
-g5 = load('./models/fc_lip5.0_w80.mat')
-g8 = load('./models/fc_lip8.0_w80.mat')
-g10 = load('./models/fc_lip10.0_w80.mat')
-g50 = load('./models/fc_lip50.0_w80.mat')
-mon = load('./models/mon_w80.mat')
-ode = load('./models/ode_w80.mat')
-uncon = load('./models/uncon_w80.mat')
+g02 = load('./models/adversarial_training/fc_lip0.2_w80.mat')
+g03 = load('./models/adversarial_training/fc_lip0.4_w80.mat')
+g03 = load('./models/adversarial_training/fc_lip0.3_w80.mat')
+g04 = load('./models/adversarial_training/fc_lip0.4_w80.mat')
+g05 = load('./models/adversarial_training/fc_lip0.5_w80.mat')
+g08 = load('./models/adversarial_training/fc_lip0.8_w80.mat')
+g5 = load('./models/adversarial_training/fc_lip5.0_w80.mat')
+g8 = load('./models/adversarial_training/fc_lip8.0_w80.mat')
+g10 = load('./models/adversarial_training/fc_lip10.0_w80.mat')
+g50 = load('./models/adversarial_training/fc_lip50.0_w80.mat')
+mon = load('./models/adversarial_training/mon_w80.mat')
+% ode = load('./models/adversarial_training/ode_w80.mat')
+uncon = load('./models/adversarial_training/uncon_w80.mat')
 
 %%
+range = 1:15
 
 fig_pos = [-0 -0 1200 900];
 
@@ -35,20 +36,22 @@ fig = figure('Position', fig_pos)
 fig.PaperPositionMode = 'auto';
 fig.PaperOrientation = 'landscape';
 
-p1 = plot(g02.epsilon, g02.errors, 'LineWidth', 2)
+p1 = plot(g02.epsilon(range), g02.errors(range), 'LineWidth', 2)
 hold on
-p2 = plot(g03.epsilon, g03.errors, 'LineWidth', 2)
-p3 = plot(g08.epsilon, g08.errors, 'LineWidth', 2)
-p4 = plot(g5.epsilon, g5.errors, 'LineWidth', 2)
+p2 = plot(g03.epsilon(range), g03.errors(range), 'LineWidth', 2)
+p2 = plot(g04.epsilon(range), g04.errors(range), 'LineWidth', 2)
+p2 = plot(g05.epsilon(range), g05.errors(range), 'LineWidth', 2)
+p3 = plot(g08.epsilon(range), g08.errors(range), 'LineWidth', 2)
+p4 = plot(g5.epsilon(range), g5.errors(range), 'LineWidth', 2)
 
 
-p5 = plot(mon.epsilon, mon.errors, 'k--', 'LineWidth', 2)
-p6 = plot(uncon.epsilon, uncon.errors, 'k-.', 'LineWidth', 2)
-p7 = plot(ode.epsilon, ode.errors, 'k:', 'LineWidth', 2)
+p5 = plot(mon.epsilon(range), mon.errors(range), 'k--', 'LineWidth', 2)
+p6 = plot(uncon.epsilon(range), uncon.errors(range), 'k-.', 'LineWidth', 2)
+% p7 = plot(ode.epsilon, ode.errors, 'k:', 'LineWidth', 2)
 
-p8 = plot(aa0.epsilon, aa0.errors, 'LineWidth', 2)
-p9 = plot(aa1p0.epsilon, aa1p0.errors, 'LineWidth', 2)
-p10 = plot(aa10p0.epsilon, aa5p0.errors, 'LineWidth', 2)
+p8 = plot(aa0.epsilon(range), aa0.errors(range), 'LineWidth', 2)
+p9 = plot(aa1p0.epsilon(range), aa1p0.errors(range), 'LineWidth', 2)
+p10 = plot(aa10p0.epsilon(range), aa2p0.errors(range), 'LineWidth', 2)
 
 % p10 = plot(g50.epsilon, g50.errors, 'LineWidth', 2)
 % p10 = plot(g8.epsilon, g8.errors, 'LineWidth', 2)
