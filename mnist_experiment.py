@@ -49,7 +49,7 @@ if __name__ == "__main__":
                   "mean": (0.1307,),
                   "std": (0.3081,)}
 
-    load_models = True
+    load_models = False
 
     path = './models/adversarial_training/'
     epochs = 30
@@ -62,40 +62,37 @@ if __name__ == "__main__":
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    # Train FF convolutional network
-    for epsilon in [0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0]:
+    # # Train FF convolutional network
+    # for epsilon in [0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0]:
 
-        name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
-        FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,
-                                             width=width)
+    #     name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
+    #     FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,
+    #                                          width=width)
 
-        if load_models:
-            FFNet.load_state_dict(torch.load(path + name + '.params'))
-        else:
+    #     if load_models:
+    #         FFNet.load_state_dict(torch.load(path + name + '.params'))
+    #     else:
 
-            train_res, val_res = train.adversarial_training(trainLoader, testLoader,
-                                                            FFNet, data_stats, epsilon,
-                                                            max_lr=1e-3,
-                                                            lr_mode='step',
-                                                            step=lr_decay_steps,
-                                                            change_mo=False,
-                                                            epochs=epochs,
-                                                            print_freq=100,
-                                                            tune_alpha=False,
-                                                            warmstart=False)
+    #         train_res, val_res = train.adversarial_training(trainLoader, testLoader,
+    #                                                         FFNet, data_stats, epsilon,
+    #                                                         max_lr=1e-3,
+    #                                                         lr_mode='step',
+    #                                                         step=lr_decay_steps,
+    #                                                         change_mo=False,
+    #                                                         epochs=epochs,
+    #                                                         print_freq=100,
+    #                                                         tune_alpha=False,
+    #                                                         warmstart=False)
 
-            torch.save(FFNet.state_dict(), path + name + '.params')
+    #         torch.save(FFNet.state_dict(), path + name + '.params')
 
-        res = train.test_robustness(FFNet, testLoader, data_stats)
-        io.savemat(path + name + ".mat", res)
+    #     res = train.test_robustness(FFNet, testLoader, data_stats)
+    #     io.savemat(path + name + ".mat", res)
 
     # # Lipschitz Networks
     models = []
     results = []
-    # for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
-    # for width in [20, 50, 80, 110,  140, 250, 1000]:
     for width in [80]:
-        # for gamma in [0.5, 1.0, 2.0]:
         for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
 
             torch.manual_seed(seed)
@@ -158,15 +155,15 @@ if __name__ == "__main__":
         unconNet.to(device)
 
     else:
-        uncon_train, uncon_test, times = train.train(trainLoader, testLoader,
-                                                     unconNet,
-                                                     max_lr=1e-3,
-                                                     lr_mode='step',
-                                                     step=lr_decay_steps,
-                                                     change_mo=False,
-                                                     epochs=epochs,
-                                                     print_freq=100,
-                                                     tune_alpha=True)
+        uncon_train, uncon_test = train.train(trainLoader, testLoader,
+                                              unconNet,
+                                              max_lr=1e-3,
+                                              lr_mode='step',
+                                              step=lr_decay_steps,
+                                              change_mo=False,
+                                              epochs=epochs,
+                                              print_freq=100,
+                                              tune_alpha=True)
         torch.save(unconNet.state_dict(), path + name + '.params')
 
     res = train.test_robustness(unconNet, testLoader, data_stats)
