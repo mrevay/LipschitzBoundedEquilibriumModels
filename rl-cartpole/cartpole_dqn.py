@@ -14,13 +14,8 @@ from collections import deque
 import torch.nn as nn
 import torch.nn.functional
 import torch.optim as optim
-from torch import manual_seed
 
 import matplotlib.pyplot as plt
-
-seed = 24
-manual_seed(seed)
-np.random.seed(seed)
 
 class FCNetwork(nn.Module):
     """
@@ -50,6 +45,12 @@ class FCNetwork(nn.Module):
         x = self.fc3(x)
 
         return x
+
+class LBEN(nn.Module):
+    """
+    Lipschitz-Bounded Equilibrium Network, 
+    ReLu activation function.
+    """
 
 
 class DQNCartPoleLearner():
@@ -320,7 +321,6 @@ if __name__ == '__main__':
     save_dict = agent.make_hyperparams_dict()
     save_dict["scores"] = scores
     save_dict["mean_scores"] = mean_scores
-    save_dict["random_seed"] = seed
     with open(fpath + ".json", "w") as f:
         json.dump(save_dict, f)
     plt.show()
