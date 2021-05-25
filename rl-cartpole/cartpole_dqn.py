@@ -64,9 +64,10 @@ class DQNCartPoleLearner():
         self.train_start     = 1000     # number of samples to add to memory before training (1000)
 
         # Parameters of exploration vs. exploitation
-        self.epsilon         = 0.95     # probability of exploration, initially only explore (0.95)
+        self.epsilon_max     = 0.95     # probability of exploration, initially only explore (0.95)
         self.epsilon_decay   = 0.999    # amount by which to decay after every action (0.9998)
         self.epsilon_min     = 0.005    # minimum value of epsilon (0.05)
+        self.epsilon         = self.epsilon_max
 
         # Memory to store the tuples of (state, action, reward, next_state, done) (14e3)
         self.memory_size = 14000
@@ -96,7 +97,7 @@ class DQNCartPoleLearner():
             "learning_rate":    self.learning_rate,
             "batch_size":       self.batch_size,
             "train_start":      self.train_start,
-            "epsilon_set":      (self.epsilon, self.epsilon_decay, self.epsilon_min),
+            "epsilon_set":      (self.epsilon_max, self.epsilon_decay, self.epsilon_min),
             "memory_size":      self.memory_size,
             "clipping":         self.clipping,
             "optimizer":        "Adam",
