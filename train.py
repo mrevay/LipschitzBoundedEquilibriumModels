@@ -1007,10 +1007,11 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     # unnormalize inputs because foolbox is weird and must re-whiten them...
     uhat = std[..., None, None] * u + mu[..., None, None]
 
-    preprocessing = dict(mean=mu, std=std, axis=-3)
-    fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
+    # preprocessing = dict(mean=mu, std=std, axis=-3)
+    # fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
+    fmodel = fb.PyTorchModel(model, bounds=(0, 1))
     attack = fb.attacks.L2FastGradientAttack()
-    raw, advs, success = attack(fmodel, uhat, target, epsilons=epsilons)
+    raw, advs, success = attack(fmodel, u, target, epsilons=epsilons)
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
 
