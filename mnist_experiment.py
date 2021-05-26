@@ -49,7 +49,7 @@ if __name__ == "__main__":
                   "mean": (0.1307,),
                   "std": (0.3081,)}
 
-    load_models = False
+    load_models = True
 
     path = './models/adversarial_training/'
     epochs = 30
