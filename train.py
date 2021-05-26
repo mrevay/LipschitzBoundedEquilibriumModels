@@ -997,7 +997,7 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(0, 20, 40)
+    epsilons = np.linspace(0, 15, 40)
     errors = []
 
     # Perform adversarial attacks
@@ -1011,7 +1011,7 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
     # fmodel = fb.PyTorchModel(model, bounds=(0, 1))
     attack = fb.attacks.L2FastGradientAttack()
-    raw, advs, success = attack(fmodel, u, target, epsilons=epsilons)
+    raw, advs, success = attack(fmodel, uhat, target, epsilons=epsilons)
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
 
