@@ -10,12 +10,21 @@ import json
 import random
 import numpy as np
 from collections import deque
+import matplotlib.pyplot as plt
 
 import torch.nn as nn
 import torch.nn.functional
 import torch.optim as optim
 
-import matplotlib.pyplot as plt
+import os, sys
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
+
+import NODEN
+from splitting import MONPeacemanRachford
+from train import MON_DEFAULTS, expand_args, run_tune_alpha
+
 
 class FCNetwork(nn.Module):
     """
@@ -26,6 +35,7 @@ class FCNetwork(nn.Module):
     def __init__(self, input_size, output_size):
         """Define the layers of the network."""
 
+        # Network dimensions
         self.input_size = input_size        # 4 states
         self.output_size = output_size      # 2 actions
         self.hidden = 256                   # (256)
@@ -46,11 +56,35 @@ class FCNetwork(nn.Module):
 
         return x
 
-class LBEN(nn.Module):
-    """
-    Lipschitz-Bounded Equilibrium Network, 
-    ReLu activation function.
-    """
+
+# TODO: Need to ensure operator splitting converges
+class NODEN_Lip_Net(nn.Module):
+    """Modified from train.py"""
+
+    def __init__(self, input_size, output_size, gamma, **kwargs):
+        """Define the network structure."""
+
+        # Network dimensions
+        self.input_size = input_size
+        self.output_size = output_size
+        self.width = 256
+        self.m = 0.1
+
+        super().__init__()
+
+        # Define network structure
+        linear_module = NODEN.NODEN_Lipschitz_Fc(self.input_size, self.width, self.output_size, gamma, m=self.m)
+        nonlin_module = NODEN.NODEN_ReLU()
+        self.mon = MONPeacemanRachford(linear_module, nonlin_module, **expand_args(MON_DEFAULTS, kwargs))
+
+    def forward(self, x):
+        """Define the forward pass."""
+
+        x = x.view(x.shape[0], -1)
+        z = self.mon(x)
+        y = self.mon.linear_module.G(z[-1])
+
+        return y
 
 
 class DQNCartPoleLearner():
@@ -58,16 +92,16 @@ class DQNCartPoleLearner():
         self.state_size = state_size
         self.action_size = action_size
 
-        # Hyperparameters of the DQN model.
+        # Q-learning hyperparameters
         self.discount_factor = 0.99     # discount factor on future rewards (0.99)
         self.learning_rate   = 1e-4     # learning rate for the network (1e-4)
-        self.batch_size      = 128      # batch size (256)
+        self.batch_size      = 128      # batch size (128)
         self.train_start     = 1000     # number of samples to add to memory before training (1000)
 
         # Parameters of exploration vs. exploitation
         self.epsilon_max     = 0.95     # probability of exploration, initially only explore (0.95)
-        self.epsilon_decay   = 0.9998   # amount by which to decay after every action (0.9998)
-        self.epsilon_min     = 0.005    # minimum value of epsilon (0.05)
+        self.epsilon_decay   = 0.9998   # amount by which to decay after every action (v0: 0.999)/(v1: 0.9998)
+        self.epsilon_min     = 0.005    # minimum value of epsilon (0.005)
         self.epsilon         = self.epsilon_max
 
         # Memory to store the tuples of (state, action, reward, next_state, done) (14e3)
@@ -78,6 +112,9 @@ class DQNCartPoleLearner():
         self.clipping = 1.0
 
         # Create the model
+        self.gamma = None
+        # self.gamma = 240
+        self.alpha = 0.5
         self.model = self.create_nn_model()         # Train this model
         self.old_model = self.create_nn_model()     # Use this model to get the expected Q_value
         self.update_old_model()
@@ -87,7 +124,7 @@ class DQNCartPoleLearner():
         self.criterion = nn.MSELoss()
 
         # For plotting/saving (save the loss later!!)
-        self.name = "cartpole_05"
+        self.name = "cartpole_lben_02"
         self.loss = []
 
     def make_hyperparams_dict(self):
@@ -102,7 +139,9 @@ class DQNCartPoleLearner():
             "memory_size":      self.memory_size,
             "clipping":         self.clipping,
             "optimizer":        "Adam",
-            "lossfunc":         "MSE"
+            "lossfunc":         "MSE",
+            "lben_gamma":       self.gamma,
+            "lben_alpha":       self.alpha
         }
         return hyper_dict
 
@@ -112,7 +151,12 @@ class DQNCartPoleLearner():
         :return: The network that approximates the Q-value function
         :rtype: FCNetwork
         """
-        return FCNetwork(self.state_size, self.action_size)
+
+        # TODO: If need be, try tuning alpha for operator splitting
+        if self.gamma is None:
+            return FCNetwork(self.state_size, self.action_size)
+        return  NODEN_Lip_Net(self.state_size, self.action_size, self.gamma, 
+                              alpha=self.alpha, verbose=False)
 
     def choose_action(self, state):
         """
@@ -214,7 +258,7 @@ if __name__ == '__main__':
     great_success = False
 
     # Create the cart pole environment from the open AI gym
-    env = gym.make('CartPole-v0')
+    env = gym.make('CartPole-v1')
     max_score = env.spec.max_episode_steps
     threshold = env.spec.reward_threshold
 
@@ -240,8 +284,8 @@ if __name__ == '__main__':
         done = False
         score = 0
         mean_score = 0
-        state = env.reset()     # intiialize the cartpole environment
-        state = np.reshape(state, [1, state_size]).astype(np.float32)               # convert to a 1x4 vector
+        state = env.reset()
+        state = np.reshape(state, [1, state_size]).astype(np.float32)
 
         while not done:
 
@@ -251,7 +295,7 @@ if __name__ == '__main__':
             # Perform an action and go to next step
             action = agent.choose_action(state)
             next_state, reward, done, info = env.step(action)
-            next_state = np.reshape(next_state, [1, state_size]).astype(np.float32) # convert to a 1x4 vector
+            next_state = np.reshape(next_state, [1, state_size]).astype(np.float32)
 
            # Keep reward if big score or still going, 
            # otherwise we failed (big negative reward)
@@ -293,8 +337,8 @@ if __name__ == '__main__':
                     break
 
                 # Print values
-                print("Episode: {}, score: {}, mean score: {}, epsilon: {:.3f}".format(
-                    e, score, mean_score,agent.epsilon))
+                print("Episode: {}, score: {}, mean score: {:.2f}, epsilon: {:.3f}".format(
+                    e, scores[e], mean_scores[e], agent.epsilon))
 
                 # Plot values
                 episodes.append(e)
@@ -324,3 +368,22 @@ if __name__ == '__main__':
     with open(fpath + ".json", "w") as f:
         json.dump(save_dict, f)
     plt.show()
+
+
+def estimate_gamma(agent):
+    """
+    Estimate the Lipschitz constant of an FCNetwork object.
+    This is not great code, hacking things together last minute.
+    """
+
+    weights = []
+    weights.append(agent.model.state_dict()["fc1.weight"].numpy())
+    weights.append(agent.model.state_dict()["fc2.weight"].numpy())
+    weights.append(agent.model.state_dict()["fc3.weight"].numpy())
+
+    lip_est = 1.0
+    for i in range(3):
+        _, s, _ = np.linalg.svd(weights[i])
+        lip_est *= s.max()
+
+    return lip_est

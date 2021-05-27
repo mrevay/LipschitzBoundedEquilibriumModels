@@ -1,16 +1,11 @@
 import gym
 import json
 import torch
+import cvxpy
 import numpy as np
 import matplotlib.pyplot as plt
 
-import os, sys
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
-
-import train
-from cartpole_dqn import FCNetwork
+from cartpole_dqn import FCNetwork, NODEN_Lip_Net, estimate_gamma
 
 
 class LearnedAgent():
@@ -34,26 +29,27 @@ class LearnedAgent():
         q_values = self.model(state_tensor).detach().numpy()[0]
         return np.argmax(q_values)
 
-# Read in one of the models
-
 
 # Read in a model and its info
-fname = "saved_models/cartpole_04"
-model = FCNetwork(4,2)
+# TODO: Need to make sure the hyperparameters are the same as initialisation?
+fname = "saved_models/cartpole_lben_00"
+if "lben" in fname:
+    with open(fname + ".json") as f:
+        hyper_dict = json.load(f)
+    model = NODEN_Lip_Net(4,2, gamma=hyper_dict["lben_alpha"], verbose=False)
+else:
+    model = FCNetwork(4,2)
 model.load_state_dict(torch.load(fname + ".pt"))
 agent = LearnedAgent(model)
-
-with open(fname + ".json") as f:
-  hyper_dict = json.load(f)
 
 # Try to test it out on the cart-pole environment
 env = gym.make('CartPole-v0')
 state = env.reset()
-my_error = 0.05
-for _ in range(500):
+my_error = 0.0
+for _ in range(env.spec.max_episode_steps):
     env.render()
     a = agent(state)
     out = env.step(a)
-    out = env.step(env.action_space.sample())
-    # state = out[0] + my_error*np.random.randn()
+    state = out[0] + my_error*np.random.randn()
+    print(_)
 env.close()
