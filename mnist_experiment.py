@@ -49,7 +49,7 @@ if __name__ == "__main__":
                   "mean": (0.1307,),
                   "std": (0.3081,)}
 
-    load_models = True
+    load_models = False
 
     path = './models/adversarial_training/'
     # path = './models/'
@@ -64,144 +64,185 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # # Adversarial Training for  FF network
-    for epsilon in [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0]:
+#     for epsilon in [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0]:
 
-        name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
-        FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,
-                                             width=width)
+#         name = 'ff_w{:d}_eps{:1.1f}'.format(width, epsilon)
+#         FFNet = train.FF_Fully_Connected_Net(in_dim=image_size,
+#                                              width=width)
 
-        if load_models:
-            FFNet.load_state_dict(torch.load(path + name + '.params'))
-        else:
+#         if load_models:
+#             FFNet.load_state_dict(torch.load(path + name + '.params'))
+#         else:
 
-            train_res, val_res = train.adversarial_training(trainLoader, testLoader,
-                                                            FFNet, data_stats, epsilon,
-                                                            max_lr=1e-3,
-                                                            lr_mode='step',
-                                                            step=lr_decay_steps,
-                                                            change_mo=False,
-                                                            epochs=epochs,
-                                                            print_freq=100,
-                                                            tune_alpha=False,
-                                                            warmstart=False)
+#             train_res, val_res = train.adversarial_training(trainLoader, testLoader,
+#                                                             FFNet, data_stats, epsilon,
+#                                                             max_lr=1e-3,
+#                                                             lr_mode='step',
+#                                                             step=lr_decay_steps,
+#                                                             change_mo=False,
+#                                                             epochs=epochs,
+#                                                             print_freq=100,
+#                                                             tune_alpha=False,
+#                                                             warmstart=False)
 
-            torch.save(FFNet.state_dict(), path + name + '.params')
+#             torch.save(FFNet.state_dict(), path + name + '.params')
 
-        res = train.test_robustness(FFNet, testLoader, data_stats)
-        io.savemat(path + name + ".mat", res)
+#         res = train.test_robustness(FFNet, testLoader, data_stats)
+#         io.savemat(path + name + ".mat", res)
 
-    # # Lipschitz Networks
-    models = []
-    results = []
-    for width in [80]:
-        for gamma in [0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
+#  # Lipschitz Networks
+#     models = []
+#     results = []
+#     for width in [80]:
+#         for gamma in [0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 5.0]:
 
-            torch.manual_seed(seed)
-            numpy.random.seed(seed)
+#             torch.manual_seed(seed)
+#             numpy.random.seed(seed)
 
-            name = 'fc_lip{:2.1f}_w{:d}'.format(gamma, width)
+#             name = 'fc_lip{:2.1f}_w{:d}'.format(gamma, width)
 
-            LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
-                                         in_dim=image_size,
-                                         width=width,
-                                         out_dim=10,
-                                         alpha=1.0,
-                                         max_iter=300,
-                                         tol=tol,
-                                         m=1E-5,
-                                         gamma=gamma,
-                                         verbose=False)
+#             LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
+#                                          in_dim=image_size,
+#                                          width=width,
+#                                          out_dim=10,
+#                                          alpha=1.0,
+#                                          max_iter=300,
+#                                          tol=tol,
+#                                          m=1E-5,
+#                                          gamma=gamma,
+#                                          verbose=False)
 
-            if load_models:
-                LipNet.load_state_dict(torch.load(path + name + '.params'))
-                LipNet.to(device)
+#             if load_models:
+#                 LipNet.load_state_dict(torch.load(path + name + '.params'))
+#                 LipNet.to(device)
 
-            else:
-                lip_train, lip_test = train.train(trainLoader, testLoader,
-                                                  LipNet,
-                                                  max_lr=1e-3,
-                                                  lr_mode='step',
-                                                  step=lr_decay_steps,
-                                                  change_mo=False,
-                                                  epochs=epochs,
-                                                  print_freq=100,
-                                                  tune_alpha=True)
-                torch.save(LipNet.state_dict(), path + name + '.params')
+#             else:
+#                 lip_train, lip_test = train.train(trainLoader, testLoader,
+#                                                   LipNet,
+#                                                   max_lr=1e-3,
+#                                                   lr_mode='step',
+#                                                   step=lr_decay_steps,
+#                                                   change_mo=False,
+#                                                   epochs=epochs,
+#                                                   print_freq=100,
+#                                                   tune_alpha=True)
 
-            print('Testing model: ', name)
-            res = train.test_robustness(LipNet, testLoader, data_stats)
-            io.savemat(path + name + '.mat', res)
+#                 torch.save(LipNet.state_dict(), path + name + '.params')
 
-            # train_stats = {"train": lip_train, "test": lip_test}
-            # io.savemat(path + name + "_times.mat", train_stats)
+#             print('Testing model: ', name)
+#             res = train.test_robustness(LipNet, testLoader, data_stats)
+#             io.savemat(path + name + '.mat', res)
 
-            # models += [LipNet]
-            # results += [res]
+#  # Adversarially trained Lipschitz Networks
+#     models = []
+#     results = []
+#     width = 80
+#     for eps in [0.5, 1.0, 2.0, 3.0]:
+#         for gamma in [0.2, 1.0, 2.0]:
 
-    # unconstrained network
-    torch.manual_seed(seed)
-    numpy.random.seed(seed)
+#             torch.manual_seed(seed)
+#             numpy.random.seed(seed)
 
-    name = 'uncon_w{:d}'.format(width)
+#             name = 'fc_lip{:2.1f}_w{:d}_eps{:1.1f}'.format(gamma, width, eps)
 
-    unconNet = train.NODENFcNet_uncon(sp.MONPeacemanRachford,
-                                      in_dim=image_size,
-                                      out_dim=width,
-                                      alpha=1.0,
-                                      max_iter=300,
-                                      tol=tol,
-                                      m=1.0)
-    if load_models:
-        unconNet.load_state_dict(torch.load(path + name + '.params'))
-        unconNet.to(device)
+#             LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
+#                                          in_dim=image_size,
+#                                          width=width,
+#                                          out_dim=10,
+#                                          alpha=1.0,
+#                                          max_iter=300,
+#                                          tol=tol,
+#                                          m=1E-5,
+#                                          gamma=gamma,
+#                                          verbose=False)
 
-    else:
-        uncon_train, uncon_test = train.train(trainLoader, testLoader,
-                                              unconNet,
-                                              max_lr=1e-3,
-                                              lr_mode='step',
-                                              step=lr_decay_steps,
-                                              change_mo=False,
-                                              epochs=epochs,
-                                              print_freq=100,
-                                              tune_alpha=True)
-        torch.save(unconNet.state_dict(), path + name + '.params')
+#             if load_models:
+#                 LipNet.load_state_dict(torch.load(path + name + '.params'))
+#                 LipNet.to(device)
 
-    res = train.test_robustness(unconNet, testLoader, data_stats)
-    io.savemat(path + name + '.mat', res)
-    # train_stats = {"train": uncon_train, "test": uncon_test, "time": times}
-    # io.savemat(path + name + "_times.mat", train_stats)
+#             else:
+
+#                 train_res, val_res = train.adversarial_training(trainLoader, testLoader,
+#                                                                 FFNet, data_stats, epsilon,
+#                                                                 max_lr=1e-3,
+#                                                                 lr_mode='step',
+#                                                                 step=lr_decay_steps,
+#                                                                 change_mo=False,
+#                                                                 epochs=epochs,
+#                                                                 print_freq=100,
+#                                                                 tune_alpha=False,
+#                                                                 warmstart=False)
+
+#                 torch.save(LipNet.state_dict(), path + name + '.params')
+
+#             print('Testing model: ', name)
+#             res = train.test_robustness(LipNet, testLoader, data_stats)
+#             io.savemat(path + name + '.mat', res)
+
+#     # unconstrained network
+#     torch.manual_seed(seed)
+#     numpy.random.seed(seed)
+
+#     name = 'uncon_w{:d}'.format(width)
+
+#     unconNet = train.NODENFcNet_uncon(sp.MONPeacemanRachford,
+#                                       in_dim=image_size,
+#                                       out_dim=width,
+#                                       alpha=1.0,
+#                                       max_iter=300,
+#                                       tol=tol,
+#                                       m=1.0)
+#     if load_models:
+#         unconNet.load_state_dict(torch.load(path + name + '.params'))
+#         unconNet.to(device)
+
+#     else:
+#         uncon_train, uncon_test = train.train(trainLoader, testLoader,
+#                                               unconNet,
+#                                               max_lr=1e-3,
+#                                               lr_mode='step',
+#                                               step=lr_decay_steps,
+#                                               change_mo=False,
+#                                               epochs=epochs,
+#                                               print_freq=100,
+#                                               tune_alpha=True)
+#         torch.save(unconNet.state_dict(), path + name + '.params')
+
+#     res = train.test_robustness(unconNet, testLoader, data_stats)
+#     io.savemat(path + name + '.mat', res)
+#     # train_stats = {"train": uncon_train, "test": uncon_test, "time": times}
+#     # io.savemat(path + name + "_times.mat", train_stats)
 
     # Ode stability condition
-    # torch.manual_seed(seed)
-    # numpy.random.seed(seed)
-    # name = 'ode_w{:d}'.format(width)
+    torch.manual_seed(seed)
+    numpy.random.seed(seed)
+    name = 'ode_w{:d}'.format(width)
 
-    # odeNet = train.NODENFcNet(sp.MONPeacemanRachford,
-    #                           in_dim=image_size,
-    #                           out_dim=width,
-    #                           alpha=1.0,
-    #                           max_iter=300,
-    #                           tol=tol,
-    #                           m=1.0)
+    odeNet = train.NODENFcNet(sp.MONPeacemanRachford,
+                              in_dim=image_size,
+                              out_dim=width,
+                              alpha=1.0,
+                              max_iter=300,
+                              tol=tol,
+                              m=1.0)
 
-    # if load_models:
-    #     odeNet.load_state_dict(torch.load(path + name + '.params'))
-    #     odeNet.to(device)
-    # else:
-    #     ode_train, ode_test, times = train.train(trainLoader, testLoader,
-    #                                              odeNet,
-    #                                              max_lr=1e-3,
-    #                                              lr_mode='step',
-    #                                              step=lr_decay_steps,
-    #                                              change_mo=False,
-    #                                              epochs=epochs,
-    #                                              print_freq=100,
-    #                                              tune_alpha=True)
-    #     # torch.save(odeNet.state_dict(), path + name + '.params')
+    if load_models:
+        odeNet.load_state_dict(torch.load(path + name + '.params'))
+        odeNet.to(device)
+    else:
+        ode_train, ode_test = train.train(trainLoader, testLoader,
+                                          odeNet,
+                                          max_lr=1e-3,
+                                          lr_mode='step',
+                                          step=lr_decay_steps,
+                                          change_mo=False,
+                                          epochs=epochs,
+                                          print_freq=100,
+                                          tune_alpha=True)
+        # torch.save(odeNet.state_dict(), path + name + '.params')
 
-    # res = train.test_robustness(odeNet, testLoader, data_stats)
-    # io.savemat(path + name + '.mat', res)
+    res = train.test_robustness(odeNet, testLoader, data_stats)
+    io.savemat(path + name + '.mat', res)
     # train_stats = {"train": ode_train, "test": ode_test, "time": times}
     # io.savemat(path + name + "_times.mat", train_stats)
 
