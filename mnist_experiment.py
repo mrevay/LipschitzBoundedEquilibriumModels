@@ -134,50 +134,50 @@ if __name__ == "__main__":
 #             io.savemat(path + name + '.mat', res)
 
 #  # Adversarially trained Lipschitz Networks
-#     models = []
-#     results = []
-#     width = 80
-#     for eps in [0.5, 1.0, 2.0, 3.0]:
-#         for gamma in [0.2, 1.0, 2.0]:
+    models = []
+    results = []
+    width = 80
+    for eps in [0.5, 1.0, 2.0, 3.0]:
+        for gamma in [0.2, 1.0, 2.0]:
 
-#             torch.manual_seed(seed)
-#             numpy.random.seed(seed)
+            torch.manual_seed(seed)
+            numpy.random.seed(seed)
 
-#             name = 'fc_lip{:2.1f}_w{:d}_eps{:1.1f}'.format(gamma, width, eps)
+            name = 'fc_lip{:2.1f}_w{:d}_eps{:1.1f}'.format(gamma, width, eps)
 
-#             LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
-#                                          in_dim=image_size,
-#                                          width=width,
-#                                          out_dim=10,
-#                                          alpha=1.0,
-#                                          max_iter=300,
-#                                          tol=tol,
-#                                          m=1E-5,
-#                                          gamma=gamma,
-#                                          verbose=False)
+            LipNet = train.NODEN_Lip_Net(sp.MONPeacemanRachford,
+                                         in_dim=image_size,
+                                         width=width,
+                                         out_dim=10,
+                                         alpha=1.0,
+                                         max_iter=300,
+                                         tol=tol,
+                                         m=1E-5,
+                                         gamma=gamma,
+                                         verbose=False)
 
-#             if load_models:
-#                 LipNet.load_state_dict(torch.load(path + name + '.params'))
-#                 LipNet.to(device)
+            if load_models:
+                LipNet.load_state_dict(torch.load(path + name + '.params'))
+                LipNet.to(device)
 
-#             else:
+            else:
 
-#                 train_res, val_res = train.adversarial_training(trainLoader, testLoader,
-#                                                                 FFNet, data_stats, epsilon,
-#                                                                 max_lr=1e-3,
-#                                                                 lr_mode='step',
-#                                                                 step=lr_decay_steps,
-#                                                                 change_mo=False,
-#                                                                 epochs=epochs,
-#                                                                 print_freq=100,
-#                                                                 tune_alpha=False,
-#                                                                 warmstart=False)
+                train_res, val_res = train.adversarial_training(trainLoader, testLoader,
+                                                                LipNet, data_stats, eps,
+                                                                max_lr=1e-3,
+                                                                lr_mode='step',
+                                                                step=lr_decay_steps,
+                                                                change_mo=False,
+                                                                epochs=epochs,
+                                                                print_freq=100,
+                                                                tune_alpha=False,
+                                                                warmstart=False)
 
-#                 torch.save(LipNet.state_dict(), path + name + '.params')
+                torch.save(LipNet.state_dict(), path + name + '.params')
 
-#             print('Testing model: ', name)
-#             res = train.test_robustness(LipNet, testLoader, data_stats)
-#             io.savemat(path + name + '.mat', res)
+            print('Testing model: ', name)
+            res = train.test_robustness(LipNet, testLoader, data_stats)
+            io.savemat(path + name + '.mat', res)
 
 #     # unconstrained network
 #     torch.manual_seed(seed)
