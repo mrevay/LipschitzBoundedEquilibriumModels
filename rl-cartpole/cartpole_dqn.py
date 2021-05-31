@@ -113,8 +113,8 @@ class DQNCartPoleLearner():
 
         # Create the model
         self.gamma = None
-        # self.gamma = 240
-        self.alpha = 0.5
+        # self.gamma = 240                          # Lipschitz bound for LBEN
+        self.alpha = 0.5                            # Basically the step-size for operator splitting (eg: Peaceman-Rachford)
         self.model = self.create_nn_model()         # Train this model
         self.old_model = self.create_nn_model()     # Use this model to get the expected Q_value
         self.update_old_model()
