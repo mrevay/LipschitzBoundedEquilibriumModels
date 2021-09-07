@@ -926,7 +926,8 @@ class MultiConvNet(nn.Module):
         return self.Wout(z)
 
 
-def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=100):
+def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschitz=True, Lip_batches=100, plot_res=True):
+
 
     channels = data_stats["feature_size"][0]
     dimu = data_stats["feature_size"][1]
@@ -997,7 +998,7 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
     v = torch.randn_like(u, requires_grad=True, device=device)
     v.data /= 100
 
-    epsilons = np.linspace(0, 15, 40)
+    epsilons = np.linspace(0, 5, 40)
     errors = []
 
     # Perform adversarial attacks
@@ -1009,13 +1010,20 @@ def test_robustness(model, testLoader, data_stats, device='cuda', check_Lipschit
 
     preprocessing = dict(mean=mu, std=std, axis=-3)
     fmodel = fb.PyTorchModel(model, bounds=(0, 1), preprocessing=preprocessing)
+
     # fmodel = fb.PyTorchModel(model, bounds=(0, 1))
+    
     attack = fb.attacks.L2FastGradientAttack()
     raw, advs, success = attack(fmodel, uhat, target, epsilons=epsilons)
 
     errors = success.sum(dim=1).to('cpu').numpy() / float(batch[0].shape[0])
 
     print(errors[0::7])
+
+    if plot_res:
+        plt.plot(epsilons, errors)
+        # plt.show()
+
 
     results = {"nominal": nominal_perf.to('cpu').item(
     ), "epsilon": epsilons, "errors": errors, "Lipschitz": Lip.max().sqrt().item()}
